@@ -68,23 +68,23 @@ public:
 
 	constexpr const_reference at(size_type __pos) const
 	{
-		return __pos >= size()
-			? (throw std::out_of_range("array_view1d::at"), data_[0])
-			: data_[__pos];
+		if (__pos >= size())
+			throw std::out_of_range("array_view1d::at");
+		return data_[__pos];
 	}
 
 	constexpr const_reference front() const
 	{
-		return empty()
-			? (throw std::out_of_range("array_view1d::front"), data_[0])
-			: data_[0];
+		if (empty())
+			throw std::out_of_range("array_view1d::front");
+		return data_[0];
 	}
 
 	constexpr const_reference back() const
 	{
-		return empty()
-			? (throw std::out_of_range("array_view1d::back"), data_[size_ - 1])
-			: data_[size_ - 1];
+		if (empty())
+			throw std::out_of_range("array_view1d::back");
+		return data_[size_ - 1];
 	}
 
 	constexpr void clear() noexcept
