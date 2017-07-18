@@ -94,7 +94,7 @@ using namespace std::string_view_literals;
 
   template <typename _Tp>
   from_chars_result
-  __from_chars_positive(const char* first, const char* last, _Tp& value, int base)
+  __from_chars_unsigned(const char* first, const char* last, _Tp& value, int base)
   {
 	if (first == last)
 		return from_chars_result{last, std::errc::invalid_argument};
@@ -136,14 +136,35 @@ using namespace std::string_view_literals;
 	if (first == last)
 		return from_chars_result{last, std::errc::invalid_argument};
 
+	if constexpr (!std::numeric_limits<_Tp>::is_signed)
+		return __from_chars_unsigned(first, last, value, base);
+
+	using _UTp = std::make_unsigned_t<_Tp>;
+	_UTp __val;	
 	from_chars_result ret;
 	if (*first == '-')
-		ret = __from_chars_positive(first + 1, last, value, base);
+		ret = __from_chars_unsigned(first + 1, last, __val, base);
 	else
-		ret = __from_chars_positive(first,     last, value, base);
-
-	if ((ret.ec == std::errc{}) && (*first == '-'))
-		value = -value;
+		ret = __from_chars_unsigned(first,     last, __val, base);
+// 	std::cout << "Calculated " << (long) __val << std::endl;
+	
+	if (ret.ec == std::errc{})
+	{
+		if (*first == '-')
+		{
+// 			if (__val >= std::numeric_limits<_Tp>::min())
+				value = -__val;
+// 			else
+// 				return from_chars_result{ret.ptr, std::errc::result_out_of_range};
+		}
+		else
+		{
+			if (__val <= std::numeric_limits<_Tp>::max())
+				value = __val;
+			else
+				return from_chars_result{ret.ptr, std::errc::result_out_of_range};
+		}
+	}
 	return ret;	
   }
 
