@@ -1,3 +1,16 @@
+//	An implementation of the integral parts of 
+//	P0682R1: Repairing elementary string conversions (LWG 2955) 
+//		https://wg21.link/p0682r1
+
+// TODO:
+// 	There's some undefined behavior around line 177
+// 	I'm pretty sure that we don't correctly return errors for 
+//		strings "just outside" the valid range
+//	Performance?
+//	Fuzzing?
+
+
+
 #include <system_error>
 #include <type_traits>
 #include <cassert>
@@ -6,96 +19,103 @@
 
 using namespace std::string_view_literals;
 
-  struct to_chars_result {
-    char* ptr;
-    std::errc ec;
-  };
+struct to_chars_result {
+	char* ptr;
+	std::errc ec;
+};
 //	Useful bits
 
-  constexpr std::string_view all_digits = "0123456789abcdefghijklmnopqrstuvwxyz"sv;
-//   constexpr std::string_view dec_digits{all_digits.data(), 10};
-//   constexpr std::string_view oth_digits{all_digits.data() + 10, 26};
- 
+constexpr std::string_view all_digits = "0123456789abcdefghijklmnopqrstuvwxyz"sv;
 
-  template <typename _Tp>
-  to_chars_result __to_chars_positive(char* first, size_t dist, _Tp value, int base)
-  {
-  char buffer[100];
-  char *p = buffer + dist;
+//	These are the types we can handle.  All the integral types *except* bool
+template <typename _Tp>
+constexpr bool can682convert = std::is_integral_v<_Tp> && !std::is_same_v<std::remove_cv_t<_Tp>, bool>;
 
-  while (value > 0)
-  {
-  	if (p == buffer)
-  		return to_chars_result{first + dist, std::errc::value_too_large};
-  	*--p = all_digits[value % base];
-  	value /= base;
-  }
-
-  const size_t len = buffer + dist - p;
-  std::memcpy(first, p, len);
-  return to_chars_result{first + len, {}};
-  }
-
-
-//	The enable_if here should cover:
-//				for all signed and unsigned integer types and char
-//		is_integral also handles bool. TODO fix that.
-	template <typename _Tp>
-	typename std::enable_if<std::is_integral<_Tp>::value, to_chars_result>::type
-	to_chars(char* first, char* last, _Tp value, int base = 10)
+template <typename _Tp>
+to_chars_result __to_chars_positive(char* first, char* last, _Tp value, int base)
+{
+	char *p = last;
+	
+//	Fill up the buffer from the end
+	while (value > 0)
 	{
+		if (p == first)
+			return to_chars_result{last, std::errc::value_too_large};
+		*--p = all_digits[value % base];
+		value /= base;
+	}
+
+//	If we filled the buffer entirely, we're done
+	if (p == first)
+		return to_chars_result{last, {}};
+		
+//	Slide the generated chars "down" to the beginning of the buffer
+	while (p != last)
+		*first++ = *p++;
+	return to_chars_result{first, {}};
+}
+
+
+template <typename _Tp>
+typename std::enable_if<can682convert<_Tp>, to_chars_result>::type
+to_chars(char* first, char* last, _Tp value, int base = 10)
+{
 //	This is a requirement; strictly speaking, we don't need to test for it
 	if ((base < 2) || (base > 36))
 		return to_chars_result{first, std::errc::invalid_argument};
 		
-	const size_t dist = std::distance(first, last);
-	if (dist == 0)
+//	No room at the inn
+	if (first == last)
 		return to_chars_result{last, std::errc::value_too_large};
 
+//	Handle zero specially
 	if (value == 0)
 	{
 		*first = '0';
 		return to_chars_result{first + 1, {}};
 	}
 
-	if constexpr (std::numeric_limits<_Tp>::is_signed)
+//	Deal with unsigned types
+	if constexpr (!std::numeric_limits<_Tp>::is_signed)
+		return __to_chars_positive(first, last, value, base);
+	
+//	Deal with positive numbers
+	if (value > 0)
+		return __to_chars_positive(first, last, value, base);
+
+//	Deal with signed types
+	if (value != std::numeric_limits<_Tp>::min())
 	{
-		if (value < 0)
-		{
-			if (value == std::numeric_limits<_Tp>::min())
-			{
-				int rem = -(value % base); // last 'digit'
-				*first = '-';
-				to_chars_result r = __to_chars_positive(++first, 
-											dist-1, -(value / base), base);
-				if (r.ec != std::errc{})
-					return r;
-				if (r.ptr == last) 
-					return to_chars_result{last, std::errc::value_too_large};
-				*r.ptr++ = all_digits[rem];
-				return r;
-			}
-			else
-			{
-				*first = '-';
-				return __to_chars_positive(++first, dist-1, -value, base);
-			}
-		}
-	}	
-	return __to_chars_positive(first, dist, value, base);
-  }
+		*first = '-';
+		return __to_chars_positive(++first, last, -value, base);
+	}
+	else
+	{
+		int rem = -(value % base); // last 'digit'
+		*first = '-';
+		to_chars_result r = __to_chars_positive(++first, 
+									last, -(value / base), base);
+		if (r.ec != std::errc{})
+			return r;
+		if (r.ptr == last) 
+			return to_chars_result{last, std::errc::value_too_large};
+		*r.ptr++ = all_digits[rem];
+		return r;
+	}
+}
 
 
-  struct from_chars_result {
-    const char* ptr;
-    std::errc ec;
-  };
+struct from_chars_result {
+	const char* ptr;
+	std::errc ec;
+};
 
 
-  template <typename _Tp>
-  from_chars_result
-  __from_chars_unsigned(const char* first, const char* last, _Tp& value, int base)
-  {
+template <typename _Tp>
+from_chars_result
+__from_chars_unsigned(const char* first, const char* last, _Tp& value, int base)
+{
+	static_assert(!std::is_signed_v<_Tp> );
 	if (first == last)
 		return from_chars_result{last, std::errc::invalid_argument};
 
@@ -122,13 +142,13 @@ using namespace std::string_view_literals;
 		value = value * base + idx;
 		}
 	return from_chars_result{first, std::errc{}};
-  }
+}
 
 
-  template <typename _Tp>
-  typename std::enable_if<std::is_integral<_Tp>::value, from_chars_result>::type
-  from_chars(const char* first, const char* last, _Tp& value, int base = 10)
-  {
+template <typename _Tp>
+typename std::enable_if<can682convert<_Tp>, from_chars_result>::type
+from_chars(const char* first, const char* last, _Tp& value, int base = 10)
+{
 //	This is a requirement; strictly speaking, we don't need to test for it
 	if ((base < 2) || (base > 36))
 		return from_chars_result{last, std::errc::invalid_argument};
@@ -146,26 +166,25 @@ using namespace std::string_view_literals;
 		ret = __from_chars_unsigned(first + 1, last, __val, base);
 	else
 		ret = __from_chars_unsigned(first,     last, __val, base);
-// 	std::cout << "Calculated " << (long) __val << std::endl;
-	
-	if (ret.ec == std::errc{})
+
+//	Error? We're done
+	if (ret.ec != std::errc{})
+		return ret;
+
+	if (*first == '-')
 	{
-		if (*first == '-')
-		{
-// 			if (__val >= std::numeric_limits<_Tp>::min())
-				value = -__val;
-// 			else
-// 				return from_chars_result{ret.ptr, std::errc::result_out_of_range};
-		}
-		else
-		{
-			if (__val <= std::numeric_limits<_Tp>::max())
-				value = __val;
-			else
-				return from_chars_result{ret.ptr, std::errc::result_out_of_range};
-		}
+// 		if (__val >= std::numeric_limits<_Tp>::min())
+			value = -__val;
+// 		else
+// 			return from_chars_result{ret.ptr, std::errc::result_out_of_range};
 	}
-	return ret;	
+	else
+	{
+		if (__val <= std::numeric_limits<_Tp>::max())
+			value = __val;
+		else
+			return from_chars_result{ret.ptr, std::errc::result_out_of_range};
+	}
   }
 
 //   to_chars_result to_chars(char* first, char* last, float       value);
@@ -273,7 +292,8 @@ int main ()
 	test_failure(123, 0, std::errc::value_too_large);
 	test_failure(123, 1, std::errc::value_too_large);
  	test_failure(123, 2, std::errc::value_too_large);
- 	assert(test_success(123, 3,  "123"));
+ 	assert(test_success( 123, 3,   "123"));
+ 	assert(test_success(-123, 4,  "-123"));
 
 	test_failure<char>(-128, 3, std::errc::value_too_large);
 	test_failure<int> (-128, 3, std::errc::value_too_large);
@@ -414,9 +434,6 @@ int main ()
 		round_trip<short>(i);
 		round_trip<unsigned short>(i);
 	}
-
-// 	round_trip<short>(10);
-// 	round_trip<unsigned short>(10);
 
 // 	round_trip<int>(10);
 // 	round_trip<unsigned int>(10);
