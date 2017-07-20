@@ -185,7 +185,8 @@ from_chars(const char* first, const char* last, _Tp& value, int base = 10)
 		else
 			return from_chars_result{ret.ptr, std::errc::result_out_of_range};
 	}
-  }
+	return ret;
+}
 
 //   to_chars_result to_chars(char* first, char* last, float       value);
 //   to_chars_result to_chars(char* first, char* last, double      value);
@@ -203,27 +204,27 @@ from_chars(const char* first, const char* last, _Tp& value, int base = 10)
 //   from_chars_result from_chars(const char* first, const char* last, double& value, chars_format fmt = chars_format::general);
 //   from_chars_result from_chars(const char* first, const char* last, long double& value, chars_format fmt = chars_format::general);
 
-int digits(unsigned long long value, int base) {
-	const unsigned long long max = std::numeric_limits<unsigned long long>::max() / base;
-	unsigned long long ctr = base;
-	int power = 1;
-	do {
-		if (value < ctr) return power;
-		ctr *= base;
-		power++;
-		} while (ctr < max);
-	return power;
-	}
-
-template <typename T>
-int out_size(T value, int base)
-{
-	if (std::numeric_limits<T>::is_signed && value < 0)
-		return 1 + digits(
-			value == std::numeric_limits<T>::min() ? std::numeric_limits<T>::max() : -value, base);
-
-	return digits(value, base);
-}
+// int digits(unsigned long long value, int base) {
+// 	const unsigned long long max = std::numeric_limits<unsigned long long>::max() / base;
+// 	unsigned long long ctr = base;
+// 	int power = 1;
+// 	do {
+// 		if (value < ctr) return power;
+// 		ctr *= base;
+// 		power++;
+// 		} while (ctr < max);
+// 	return power;
+// 	}
+// 
+// template <typename T>
+// int out_size(T value, int base)
+// {
+// 	if (std::numeric_limits<T>::is_signed && value < 0)
+// 		return 1 + digits(
+// 			value == std::numeric_limits<T>::min() ? std::numeric_limits<T>::max() : -value, base);
+// 
+// 	return digits(value, base);
+// }
 
 template <typename T>
 bool test_success(T value, size_t len, const char *expected, int base = 10)
