@@ -158,34 +158,34 @@ from_chars(const char* first, const char* last, _Tp& value, int base = 10)
 
 	if constexpr (!std::numeric_limits<_Tp>::is_signed)
 		return __from_chars_unsigned(first, last, value, base);
+	else {
+		const bool __negative = *first == '-';
+		using _UTp = std::make_unsigned_t<_Tp>;
+		_UTp __val;	
+		const from_chars_result __ret = __from_chars_unsigned(
+							first + (__negative ? 1 : 0), last, __val, base);
 
-	using _UTp = std::make_unsigned_t<_Tp>;
-	_UTp __val;	
-	from_chars_result ret;
-	if (*first == '-')
-		ret = __from_chars_unsigned(first + 1, last, __val, base);
-	else
-		ret = __from_chars_unsigned(first,     last, __val, base);
+	//	Error? We're done
+		if (__ret.ec != std::errc{})
+			return __ret;
 
-//	Error? We're done
-	if (ret.ec != std::errc{})
-		return ret;
-
-	if (*first == '-')
-	{
-// 		if (__val >= std::numeric_limits<_Tp>::min())
-			value = -__val;
-// 		else
-// 			return from_chars_result{ret.ptr, std::errc::result_out_of_range};
-	}
-	else
-	{
-		if (__val <= std::numeric_limits<_Tp>::max())
-			value = __val;
+	//	Apply the optional negation and make sure that the result fits into the dest type
+		if (__negative)
+		{
+			if (__val <= static_cast<_UTp>(std::numeric_limits<_Tp>::min()))
+				value = -__val;
+			else
+				return from_chars_result{__ret.ptr, std::errc::result_out_of_range};
+		}
 		else
-			return from_chars_result{ret.ptr, std::errc::result_out_of_range};
+		{
+			if (__val <= std::numeric_limits<_Tp>::max())
+				value = __val;
+			else
+				return from_chars_result{__ret.ptr, std::errc::result_out_of_range};
+		}
+		return __ret;
 	}
-	return ret;
 }
 
 //   to_chars_result to_chars(char* first, char* last, float       value);
@@ -414,15 +414,14 @@ int main ()
 		assert(val == -123);
 	}
 
-// 	{
-// 		const char *cMin = "-2000";
-// 		char cVal;
-// 		auto re = from_chars<char>(cMin, cMin+5, cVal, 4);
-// 		assert(re.ec == std::errc{});
-// 		assert(re.ptr == cMin + 5);
-// 		std::cout << "Value == " << (int) cVal << std::endl;
-// // 		assert(val == -123);
-// 	}
+	{
+		const char *cMin = "-2000";
+		char cVal;
+		auto re = from_chars(cMin, cMin+5, cVal, 4);
+		assert(re.ec == std::errc{});
+		assert(re.ptr == cMin + 5);
+		assert(cVal == -128);
+	}
 
 	for (int i = 2; i <= 36; ++i)
 	{
