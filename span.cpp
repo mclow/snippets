@@ -1,3 +1,12 @@
+/* Implement <span> as defined in http://wg21.link/P0122
+ *
+ * (C) Copyright Marshall Clow 2017
+ *
+ * Distributed under the Boost Software License, Version 1.0.
+ * (See http://www.boost.org/LICENSE_1_0.txt)
+ *
+ */
+ 
 #include <cstddef>		// for std::ptrdiff_t
 #include <array>		// for std::array
 #include <type_traits>	// for remove_cv, etc
@@ -25,7 +34,12 @@ The following code does not compile:
 	assert(s2 == s3);
 
 --> I think it should
+===
+constexpr bool operator!=(const span<ElementType, Extent>& l, const
+  span<ElementType, Extent>& r) const noexcept;
 
+--> How can these be noexcept? You can't know anything about the element_type's op ==
+--> The comparisons should take the spans by value; like string_view
 */
 
 
@@ -176,9 +190,15 @@ private:
 	index_type __size;
 };
 
-template <class ElementType, std::ptrdiff_t Extent>
-	constexpr bool operator==(const span<ElementType, Extent>& __lhs, const span<ElementType, Extent>& __rhs) noexcept
+// As specified:
+// template <class ElementType, std::ptrdiff_t Extent>
+// 	constexpr bool operator==(const span<ElementType, Extent>& __lhs, const span<ElementType, Extent>& __rhs) noexcept
+// 	{ return std::equal(__lhs.begin(), __lhs.end(), __rhs.begin(), __rhs.end()); }
+
+template <class ElementType1, std::ptrdiff_t Extent1, class ElementType2, std::ptrdiff_t Extent2>
+constexpr bool operator==(const span<ElementType1, Extent1>& __lhs, const span<ElementType2, Extent2>& __rhs) noexcept
 	{ return std::equal(__lhs.begin(), __lhs.end(), __rhs.begin(), __rhs.end()); }
+
 // 
 // template <class ElementType, std::ptrdiff_t Extent>
 // 	constexpr bool operator!=(const span<ElementType, Extent>& l, const span<ElementType, Extent>& r) const noexcept;
