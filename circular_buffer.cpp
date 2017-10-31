@@ -26,10 +26,10 @@ TODO:
 		* Pass in an allocator/max size on construction?
 */
 
-#include <vector>
+#include <array>
 #include <cassert>
 
-template <typename T, size_t N, typename Container = std::vector<T>>
+template <typename T, size_t N, typename Container = std::array<T, N>>
 class circular_buffer {
 public:
     typedef Container                                container_type;
@@ -50,11 +50,11 @@ protected:
     bool         full () const { return size() == c.size(); }
 	void advance_first() { if (++first == c.end()) { wrapped = false; first = c.begin(); }}
 	void advance_last () { if (++last  == c.end()) { wrapped = true;  last  = c.begin(); }}
-	const_iterator advance(const_iterator it) { return ++it != c.end() ? it : c.begin(); }
+	const_iterator advance(const_iterator it) const { return ++it != c.end() ? it : c.begin(); }
 	typename container_type::iterator back_iter() const { return std::prev(last != c.front() ? last : c.end()); }
 
 public:
-	circular_buffer() : c(N), first(c.begin()), last(c.begin()), wrapped(false) {}
+	circular_buffer() : c(), first(c.begin()), last(c.begin()), wrapped(false) { /* c.resize(N); */ }
 	~circular_buffer() = default;
 
     bool      empty()    const { return size() == 0; }
@@ -103,7 +103,7 @@ public:
 		const_iterator it2 = rhs.first;
 		for (size_t i = 0; i < size(); ++i)
 		{
-			if (*it1 != *it2)
+			if (!(*it1 == *it2))
 				return false;
 			it1 = advance(it1);
 			it2 = rhs.advance(it2);
@@ -155,6 +155,7 @@ bool operator<=(const circular_buffer<T, N, Container>& lhs, const circular_buff
 
 template <class T, size_t N, class Container>
 void swap(const circular_buffer<T, N, Container>& lhs, const circular_buffer<T, N, Container>& rhs)
+          noexcept(lhs.swap(rhs))
   { lhs.swap(rhs); }
 
 
@@ -197,4 +198,6 @@ int main () {
 		b.push(110 + i);
 		assert(b.size() == b.capacity());
 	}
+	
+	{circular_buffer<int, 10, std::array<int, 10>> cb; }
 }
