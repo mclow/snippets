@@ -62,6 +62,14 @@ rotr(_Tp __x, unsigned int __count)
 }
 
 
+// We have:
+//	unsigned long long __clz(unsigned long long __x)
+//	unsigned long __clz(unsigned long __x)
+//	unsigned __clz(unsigned __x)
+//	and the same for __ctz and __pop_count
+
+
+
 template <class _Tp>
 constexpr inline _LIBCPP_ALWAYS_INLINE
 enable_if_t<is_integral_v<_Tp> && is_unsigned_v<_Tp>, int>
@@ -70,14 +78,13 @@ countl_zero(_Tp __x)
 	return __x == 0 ? numeric_limits<_Tp>::digits : __clz(__x);
 }
 
-
 template <class _Tp>
 constexpr inline _LIBCPP_ALWAYS_INLINE
 enable_if_t<is_integral_v<_Tp> && is_unsigned_v<_Tp>, int>
 countl_one(_Tp __x)
 {
 	return __x == numeric_limits<_Tp>::max() ?
-					numeric_limits<_Tp>::digits : countl_zero(~__x);
+					numeric_limits<_Tp>::digits : countl_zero(static_cast<_Tp>(~__x));
 }
 
 template <class _Tp>
@@ -94,7 +101,7 @@ enable_if_t<is_integral_v<_Tp> && is_unsigned_v<_Tp>, int>
 countr_one(_Tp __x)
 {
 	return __x == numeric_limits<_Tp>::max() ?
-					numeric_limits<_Tp>::digits : countr_zero(~__x);
+					numeric_limits<_Tp>::digits : countr_zero(static_cast<_Tp>(~__x));
 }
 
 template <class _Tp>
@@ -113,9 +120,19 @@ _LIBCPP_END_NAMESPACE_STD
 
 int main () {
 	for (unsigned i = 0; i < 40; ++i) {
-		std::cout << std::rotl<unsigned short>(1,i) << ' ';
-		std::cout << std::rotr<unsigned short>(1,i) << ' ';
-//		std::cout << std::popcount<unsigned short>(i) << ' '
+		std::cout << i << ": ";
+		std::cout << std::rotl<unsigned>(1,i) << ' ';
+		std::cout << std::rotr<unsigned>(1,i) << ' ';
+		std::cout << std::endl;
+		}
+
+	for (unsigned i = 0; i < 40; ++i) {
+		std::cout << i << ": ";
+		std::cout << std::countl_zero<unsigned>(i) << ' ';
+		std::cout << std::countl_one<unsigned>(i) << ' ';
+		std::cout << std::countr_zero<unsigned>(i) << ' ';
+		std::cout << std::countr_one<unsigned>(i) << ' ';
+		std::cout << std::popcount<unsigned>(i) << ' ';
 		std::cout << std::endl;
 		}
 	}
