@@ -175,21 +175,21 @@ struct __is_span_compatible_container : public std::false_type {};
 template <class _Tp, class _ElementType>
 struct __is_span_compatible_container<_Tp, _ElementType,
         std::void_t<
-		// is not a specialization of span
-	   	 	typename std::enable_if<!__is_span<_Tp>::value, std::nullptr_t>::type,
-		// is not a specialization of array
-	   	 	typename std::enable_if<!__is_std_array<_Tp>::value, std::nullptr_t>::type,
-		// data(cont) and size(cont) are well formed
-			decltype(std::data(std::declval<_Tp>())),
-			decltype(std::size(std::declval<_Tp>())),
-		// remove_pointer_t<decltype(data(cont))>(*)[] is convertible to ElementType(*)[]
-			typename std::enable_if<
-				std::is_convertible_v<
-					std::remove_pointer_t<decltype(std::data(std::declval<_Tp &>()))>(*)[],
-																		 _ElementType(*)[]>,
-				std::nullptr_t>::type
-		>>
-	: public std::true_type {};
+        // is not a specialization of span
+            typename std::enable_if<!__is_span<_Tp>::value, std::nullptr_t>::type,
+        // is not a specialization of array
+            typename std::enable_if<!__is_std_array<_Tp>::value, std::nullptr_t>::type,
+        // data(cont) and size(cont) are well formed
+            decltype(std::data(std::declval<_Tp>())),
+            decltype(std::size(std::declval<_Tp>())),
+        // remove_pointer_t<decltype(data(cont))>(*)[] is convertible to ElementType(*)[]
+            typename std::enable_if<
+                std::is_convertible_v<
+                    std::remove_pointer_t<decltype(std::data(std::declval<_Tp &>()))>(*)[],
+                                                                         _ElementType(*)[]>,
+                std::nullptr_t>::type
+        >>
+    : public std::true_type {};
 
 
 template <typename _Tp, ptrdiff_t _Extent>
@@ -340,6 +340,13 @@ public:
     constexpr const_reverse_iterator crbegin() const noexcept { return const_reverse_iterator(cend()); }
     constexpr const_reverse_iterator   crend() const noexcept { return const_reverse_iterator(cbegin()); }
 
+    constexpr void swap(span &__other) noexcept
+    {
+        pointer __p = __data;
+        __data = __other.__data;
+        __other.__data = __p;
+    }
+    
     span<const std::byte, _Extent * sizeof(element_type)> __as_bytes() const noexcept
     { return {reinterpret_cast<const std::byte *>(data()), size_bytes()}; }
 
@@ -481,6 +488,17 @@ public:
     constexpr const_reverse_iterator crbegin() const noexcept { return const_reverse_iterator(cend()); }
     constexpr const_reverse_iterator   crend() const noexcept { return const_reverse_iterator(cbegin()); }
 
+    constexpr void swap(span &__other) noexcept
+    {
+        pointer __p = __data;
+        __data = __other.__data;
+        __other.__data = __p;
+
+        index_type __sz = __size;
+        __size = __other.__size;
+        __other.__size = __sz;
+    }
+
     span<const std::byte, dynamic_extent> __as_bytes() const noexcept
     { return {reinterpret_cast<const std::byte *>(data()), size_bytes()}; }
 
@@ -498,7 +516,8 @@ struct __is_equality_comparable : public std::false_type {};
 template <class _Tp1, class _Tp2>
 struct __is_equality_comparable<
         _Tp1, _Tp2, 
-        std::void_t<decltype(std::declval<const _Tp1&>() == std::declval<const _Tp2 &>())>>
+        std::void_t<std::enable_if_t<std::is_convertible_v<bool, 
+            decltype(std::declval<const _Tp1&>() == std::declval<const _Tp2 &>())>>, std::nullptr_t>>
         : public std::true_type {};
 
 template <class _Tp1, class _Tp2, class = void>
@@ -507,7 +526,8 @@ struct __is_less_than_comparable : public std::false_type {};
 template <class _Tp1, class _Tp2>
 struct __is_less_than_comparable<
         _Tp1, _Tp2, 
-        std::void_t<decltype(std::declval<const _Tp1&>() < std::declval<const _Tp2&>())>>
+        std::void_t<std::enable_if_t<std::is_convertible_v<bool, 
+            decltype(std::declval<const _Tp1&>() < std::declval<const _Tp2 &>())>>, std::nullptr_t>>
         : public std::true_type {};
 
 //  TODO - update P0805 - SFINAE away the comparisons if the underlying types are not comparable
@@ -553,6 +573,11 @@ template <class _Tp, ptrdiff_t _Extent>
     -> typename std::enable_if<!std::is_const_v<_Tp>, decltype(__s.__as_writeable_bytes())>::type
     { return __s.__as_writeable_bytes(); }
 
+template <class _Tp, ptrdiff_t _Extent>
+    constexpr void swap(span<_Tp, _Extent> &__lhs, span<_Tp, _Extent> &__rhs) noexcept
+    { __lhs.swap(__rhs); }
+
+
 //  Deduction guides
 template<class _Tp, size_t _N>
     span(_Tp (&)[_N]) -> span<_Tp, _N>;
@@ -573,10 +598,22 @@ template<class _Container>
 
 
 
+
 #include <string>
 #include <array>
 #include <vector>
 #include <list>
+
+constexpr int global1 = 1;
+
+constexpr bool test_swap() {
+    span<const int> s1;
+    span<const int> s2{&global1, 1};
+
+    using std::swap;   swap(s1, s2);
+    return s1.size() == 1 && s2.size() == 0
+        && s1.data() == &global1 && s2.data() == nullptr;
+    }
 
 int main ()
 {
@@ -741,4 +778,26 @@ int main ()
         span sd2 = v2;
     }
         
+    {
+        class A; // incomplete
+        typedef span<A> SA;
+    }
+
+    {
+        span<const int> s1;
+        span<const int> s2{&global1, 1};
+
+        assert(s1.size() == 0);
+        assert(s1.data() == nullptr);
+        assert(s2.size() == 1);
+        assert(s2.data() == &global1);
+
+        std::swap(s1, s2);
+        assert(s1.size() == 1);
+        assert(s1.data() == &global1);
+        assert(s2.size() == 0);
+        assert(s2.data() == nullptr);
+        
+        static_assert(test_swap());
+    }
 }
