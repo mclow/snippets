@@ -200,10 +200,10 @@ public:
     using value_type             = std::remove_cv_t<_Tp>;
     using index_type             = std::ptrdiff_t;
     using difference_type        = std::ptrdiff_t;
-    using pointer                = _Tp*;
-    using reference              = _Tp&;
-    using iterator               = pointer;        // TODO libc++ wrap iterator
-    using const_iterator         = const pointer;  // TODO libc++ wrap iterator
+    using pointer                = _Tp *;
+    using reference              = _Tp &;
+    using iterator               = pointer;       // TODO libc++ wrap iterator
+    using const_iterator         = const _Tp *;   // TODO libc++ wrap iterator
     using reverse_iterator       = std::reverse_iterator<iterator>;
     using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
@@ -372,7 +372,7 @@ public:
     using pointer                = _Tp*;
     using reference              = _Tp&;
     using iterator               = pointer;        // TODO libc++ wrap iterator
-    using const_iterator         = const pointer;  // TODO libc++ wrap iterator
+    using const_iterator         = const _Tp *;   // TODO libc++ wrap iterator
     using reverse_iterator       = std::reverse_iterator<iterator>;
     using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
@@ -680,10 +680,10 @@ int main ()
     auto ss8 = s3.subspan<1, -1>(); assert(ss8.size() == 0);
 
 //  Converting
-    span<int, 0>       convs0 = s0;     // dynamic -> static extent
-    span<const int, 0> convs1 = s1;     // non-const -> const
-    span<int>          convs2 = convs0; // static -> dynamic extent
-//  span<int, 1>       convs4 = s4;     // const -> non-const  FAILS
+    span<int, 0>       convs0 = s0;     						// dynamic -> static extent
+    span<const int, 0> convs1 = s1;     (void) convs1.size(); 	// non-const -> const
+    span<int>          convs2 = convs0; (void) convs2.size();	// static -> dynamic extent
+//  span<int, 1>       convs4 = s4;     						// const -> non-const  FAILS
 
 //  Deduce from array
     {
@@ -694,11 +694,12 @@ int main ()
     assert(s6.size() == std::size(arr));
     assert(s6.data() == arr);
 
-    span<int, 5> s6f = arr;
-    span<int>    s6d = arr;
-    span<const int, 5> s6cf = arr;
-    span<const int>    s6cd = arr;
-    
+    span<int, 5> s6f = arr;				(void) s6f.size();
+    span<int>    s6d = arr;				(void) s6d.size();
+    span<const int, 5> s6cf = arr;		(void) s6cf.size();
+    span<const int>    s6cd = arr;		(void) s6cd.size();
+
+	    
     const int carr[] = { 1, 2, 3, 4};
     span s7 = carr;
     static_assert(std::is_same_v<      int, decltype(s7)::value_type>);
@@ -708,8 +709,8 @@ int main ()
 
 //  span<int, 4> s7f = carr;
 //  span<int>    s7d = carr;
-    span<const int, 4> s7cf = carr;
-    span<const int>    s7cd = carr;
+    span<const int, 4> s7cf = carr;		(void) s7cf.size();
+    span<const int>    s7cd = carr;		(void) s7cd.size();
     }
     
 //  Deduce from std::array
@@ -721,10 +722,10 @@ int main ()
     assert(s6.size() == std::size(arr));
     assert(s6.data() == arr.data());
 
-    span<int, 5> s6f = arr;
-    span<int>    s6d = arr;
-    span<const int, 5> s6cf = arr;
-    span<const int>    s6cd = arr;
+    span<int, 5> s6f = arr;				(void) s6f.size();
+    span<int>    s6d = arr;				(void) s6d.size();
+    span<const int, 5> s6cf = arr;		(void) s6cf.size();
+    span<const int>    s6cd = arr;		(void) s6cd.size();
 
     const std::array<int, 4> carr = {1, 2, 3, 4};
     span s7 = carr;
@@ -735,8 +736,8 @@ int main ()
 
 //  span<int, 4> s7f = carr;
 //  span<int>    s7d = carr;
-    span<const int, 4> s7cf = carr;
-    span<const int>    s7cd = carr;
+    span<const int, 4> s7cf = carr;		(void) s7cf.size();
+    span<const int>    s7cd = carr;		(void) s7cd.size();
     }
 
     {
@@ -765,22 +766,23 @@ int main ()
     {
         std::vector<int> v1;
         const std::vector<int> v2;
-        span<int> s1 = v1;
-        span<const int> sc1 = v1;
-        span<int, 0> s1f = v1;
-        span<const int, 0> sc1f = v1;
-        span sd1 = v1;
+        span<int> s1 = v1;					(void) s1.size();
+        span<const int> sc1 = v1;			(void) sc1.size();
+        span<int, 0> s1f = v1;				(void) s1f.size();
+        span<const int, 0> sc1f = v1;		(void) sc1f.size();
+        span sd1 = v1;						(void) sd1.size();
 
 //      span<int> s2 = v2; // fails
 //      span<int, 0> s2f = v2; // fails
-        span<const int> s2 = v2;
-        span<const int, 0> s2f = v2;
-        span sd2 = v2;
+        span<const int> s2 = v2;			(void) s2. size();
+        span<const int, 0> s2f = v2;		(void) s2f.size();
+        span s2d = v2;						(void) s2d.size();
     }
         
     {
         class A; // incomplete
         typedef span<A> SA;
+		static_assert(std::is_same<ptrdiff_t, decltype(std::declval<const SA &>().size())>::value, "");
     }
 
     {
