@@ -1,3 +1,5 @@
+#pragma once
+
 #include <set>
 
 #include "file_helpers.hpp"
