@@ -175,21 +175,21 @@ struct __is_span_compatible_container : public std::false_type {};
 template <class _Tp, class _ElementType>
 struct __is_span_compatible_container<_Tp, _ElementType,
         std::void_t<
-		// is not a specialization of span
-	   	 	typename std::enable_if<!__is_span<_Tp>::value, std::nullptr_t>::type,
-		// is not a specialization of array
-	   	 	typename std::enable_if<!__is_std_array<_Tp>::value, std::nullptr_t>::type,
-		// data(cont) and size(cont) are well formed
-			decltype(std::data(std::declval<_Tp>())),
-			decltype(std::size(std::declval<_Tp>())),
-		// remove_pointer_t<decltype(data(cont))>(*)[] is convertible to ElementType(*)[]
-			typename std::enable_if<
-				std::is_convertible_v<
-					std::remove_pointer_t<decltype(std::data(std::declval<_Tp &>()))>(*)[],
-																		 _ElementType(*)[]>,
-				std::nullptr_t>::type
-		>>
-	: public std::true_type {};
+        // is not a specialization of span
+            typename std::enable_if<!__is_span<_Tp>::value, std::nullptr_t>::type,
+        // is not a specialization of array
+            typename std::enable_if<!__is_std_array<_Tp>::value, std::nullptr_t>::type,
+        // data(cont) and size(cont) are well formed
+            decltype(std::data(std::declval<_Tp>())),
+            decltype(std::size(std::declval<_Tp>())),
+        // remove_pointer_t<decltype(data(cont))>(*)[] is convertible to ElementType(*)[]
+            typename std::enable_if<
+                std::is_convertible_v<
+                    std::remove_pointer_t<decltype(std::data(std::declval<_Tp &>()))>(*)[],
+                                                                         _ElementType(*)[]>,
+                std::nullptr_t>::type
+        >>
+    : public std::true_type {};
 
 
 template <typename _Tp, ptrdiff_t _Extent>
@@ -200,10 +200,10 @@ public:
     using value_type             = std::remove_cv_t<_Tp>;
     using index_type             = std::ptrdiff_t;
     using difference_type        = std::ptrdiff_t;
-    using pointer                = _Tp*;
-    using reference              = _Tp&;
-    using iterator               = pointer;        // TODO libc++ wrap iterator
-    using const_iterator         = const pointer;  // TODO libc++ wrap iterator
+    using pointer                = _Tp *;
+    using reference              = _Tp &;
+    using iterator               = pointer;       // TODO libc++ wrap iterator
+    using const_iterator         = const _Tp *;   // TODO libc++ wrap iterator
     using reverse_iterator       = std::reverse_iterator<iterator>;
     using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
@@ -340,6 +340,13 @@ public:
     constexpr const_reverse_iterator crbegin() const noexcept { return const_reverse_iterator(cend()); }
     constexpr const_reverse_iterator   crend() const noexcept { return const_reverse_iterator(cbegin()); }
 
+    constexpr void swap(span &__other) noexcept
+    {
+        pointer __p = __data;
+        __data = __other.__data;
+        __other.__data = __p;
+    }
+    
     span<const std::byte, _Extent * sizeof(element_type)> __as_bytes() const noexcept
     { return {reinterpret_cast<const std::byte *>(data()), size_bytes()}; }
 
@@ -365,7 +372,7 @@ public:
     using pointer                = _Tp*;
     using reference              = _Tp&;
     using iterator               = pointer;        // TODO libc++ wrap iterator
-    using const_iterator         = const pointer;  // TODO libc++ wrap iterator
+    using const_iterator         = const _Tp *;   // TODO libc++ wrap iterator
     using reverse_iterator       = std::reverse_iterator<iterator>;
     using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
@@ -481,6 +488,17 @@ public:
     constexpr const_reverse_iterator crbegin() const noexcept { return const_reverse_iterator(cend()); }
     constexpr const_reverse_iterator   crend() const noexcept { return const_reverse_iterator(cbegin()); }
 
+    constexpr void swap(span &__other) noexcept
+    {
+        pointer __p = __data;
+        __data = __other.__data;
+        __other.__data = __p;
+
+        index_type __sz = __size;
+        __size = __other.__size;
+        __other.__size = __sz;
+    }
+
     span<const std::byte, dynamic_extent> __as_bytes() const noexcept
     { return {reinterpret_cast<const std::byte *>(data()), size_bytes()}; }
 
@@ -498,7 +516,8 @@ struct __is_equality_comparable : public std::false_type {};
 template <class _Tp1, class _Tp2>
 struct __is_equality_comparable<
         _Tp1, _Tp2, 
-        std::void_t<decltype(std::declval<const _Tp1&>() == std::declval<const _Tp2 &>())>>
+        std::void_t<std::enable_if_t<std::is_convertible_v<bool, 
+            decltype(std::declval<const _Tp1&>() == std::declval<const _Tp2 &>())>>, std::nullptr_t>>
         : public std::true_type {};
 
 template <class _Tp1, class _Tp2, class = void>
@@ -507,7 +526,8 @@ struct __is_less_than_comparable : public std::false_type {};
 template <class _Tp1, class _Tp2>
 struct __is_less_than_comparable<
         _Tp1, _Tp2, 
-        std::void_t<decltype(std::declval<const _Tp1&>() < std::declval<const _Tp2&>())>>
+        std::void_t<std::enable_if_t<std::is_convertible_v<bool, 
+            decltype(std::declval<const _Tp1&>() < std::declval<const _Tp2 &>())>>, std::nullptr_t>>
         : public std::true_type {};
 
 //  TODO - update P0805 - SFINAE away the comparisons if the underlying types are not comparable
@@ -553,6 +573,11 @@ template <class _Tp, ptrdiff_t _Extent>
     -> typename std::enable_if<!std::is_const_v<_Tp>, decltype(__s.__as_writeable_bytes())>::type
     { return __s.__as_writeable_bytes(); }
 
+template <class _Tp, ptrdiff_t _Extent>
+    constexpr void swap(span<_Tp, _Extent> &__lhs, span<_Tp, _Extent> &__rhs) noexcept
+    { __lhs.swap(__rhs); }
+
+
 //  Deduction guides
 template<class _Tp, size_t _N>
     span(_Tp (&)[_N]) -> span<_Tp, _N>;
@@ -573,10 +598,22 @@ template<class _Container>
 
 
 
+
 #include <string>
 #include <array>
 #include <vector>
 #include <list>
+
+constexpr int global1 = 1;
+
+constexpr bool test_swap() {
+    span<const int> s1;
+    span<const int> s2{&global1, 1};
+
+    using std::swap;   swap(s1, s2);
+    return s1.size() == 1 && s2.size() == 0
+        && s1.data() == &global1 && s2.data() == nullptr;
+    }
 
 int main ()
 {
@@ -643,10 +680,10 @@ int main ()
     auto ss8 = s3.subspan<1, -1>(); assert(ss8.size() == 0);
 
 //  Converting
-    span<int, 0>       convs0 = s0;     // dynamic -> static extent
-    span<const int, 0> convs1 = s1;     // non-const -> const
-    span<int>          convs2 = convs0; // static -> dynamic extent
-//  span<int, 1>       convs4 = s4;     // const -> non-const  FAILS
+    span<int, 0>       convs0 = s0;     						// dynamic -> static extent
+    span<const int, 0> convs1 = s1;     (void) convs1.size(); 	// non-const -> const
+    span<int>          convs2 = convs0; (void) convs2.size();	// static -> dynamic extent
+//  span<int, 1>       convs4 = s4;     						// const -> non-const  FAILS
 
 //  Deduce from array
     {
@@ -657,11 +694,12 @@ int main ()
     assert(s6.size() == std::size(arr));
     assert(s6.data() == arr);
 
-    span<int, 5> s6f = arr;
-    span<int>    s6d = arr;
-    span<const int, 5> s6cf = arr;
-    span<const int>    s6cd = arr;
-    
+    span<int, 5> s6f = arr;				(void) s6f.size();
+    span<int>    s6d = arr;				(void) s6d.size();
+    span<const int, 5> s6cf = arr;		(void) s6cf.size();
+    span<const int>    s6cd = arr;		(void) s6cd.size();
+
+	    
     const int carr[] = { 1, 2, 3, 4};
     span s7 = carr;
     static_assert(std::is_same_v<      int, decltype(s7)::value_type>);
@@ -671,8 +709,8 @@ int main ()
 
 //  span<int, 4> s7f = carr;
 //  span<int>    s7d = carr;
-    span<const int, 4> s7cf = carr;
-    span<const int>    s7cd = carr;
+    span<const int, 4> s7cf = carr;		(void) s7cf.size();
+    span<const int>    s7cd = carr;		(void) s7cd.size();
     }
     
 //  Deduce from std::array
@@ -684,10 +722,10 @@ int main ()
     assert(s6.size() == std::size(arr));
     assert(s6.data() == arr.data());
 
-    span<int, 5> s6f = arr;
-    span<int>    s6d = arr;
-    span<const int, 5> s6cf = arr;
-    span<const int>    s6cd = arr;
+    span<int, 5> s6f = arr;				(void) s6f.size();
+    span<int>    s6d = arr;				(void) s6d.size();
+    span<const int, 5> s6cf = arr;		(void) s6cf.size();
+    span<const int>    s6cd = arr;		(void) s6cd.size();
 
     const std::array<int, 4> carr = {1, 2, 3, 4};
     span s7 = carr;
@@ -698,8 +736,8 @@ int main ()
 
 //  span<int, 4> s7f = carr;
 //  span<int>    s7d = carr;
-    span<const int, 4> s7cf = carr;
-    span<const int>    s7cd = carr;
+    span<const int, 4> s7cf = carr;		(void) s7cf.size();
+    span<const int>    s7cd = carr;		(void) s7cd.size();
     }
 
     {
@@ -728,17 +766,40 @@ int main ()
     {
         std::vector<int> v1;
         const std::vector<int> v2;
-        span<int> s1 = v1;
-        span<const int> sc1 = v1;
-        span<int, 0> s1f = v1;
-        span<const int, 0> sc1f = v1;
-        span sd1 = v1;
+        span<int> s1 = v1;					(void) s1.size();
+        span<const int> sc1 = v1;			(void) sc1.size();
+        span<int, 0> s1f = v1;				(void) s1f.size();
+        span<const int, 0> sc1f = v1;		(void) sc1f.size();
+        span sd1 = v1;						(void) sd1.size();
 
 //      span<int> s2 = v2; // fails
 //      span<int, 0> s2f = v2; // fails
-        span<const int> s2 = v2;
-        span<const int, 0> s2f = v2;
-        span sd2 = v2;
+        span<const int> s2 = v2;			(void) s2. size();
+        span<const int, 0> s2f = v2;		(void) s2f.size();
+        span s2d = v2;						(void) s2d.size();
     }
         
+    {
+        class A; // incomplete
+        typedef span<A> SA;
+		static_assert(std::is_same<ptrdiff_t, decltype(std::declval<const SA &>().size())>::value, "");
+    }
+
+    {
+        span<const int> s1;
+        span<const int> s2{&global1, 1};
+
+        assert(s1.size() == 0);
+        assert(s1.data() == nullptr);
+        assert(s2.size() == 1);
+        assert(s2.data() == &global1);
+
+        std::swap(s1, s2);
+        assert(s1.size() == 1);
+        assert(s1.data() == &global1);
+        assert(s2.size() == 0);
+        assert(s2.data() == nullptr);
+        
+        static_assert(test_swap());
+    }
 }
