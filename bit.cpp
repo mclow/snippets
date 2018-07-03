@@ -78,10 +78,10 @@ template<class _Tp>
 constexpr typename std::enable_if<__is_unsigned_integer<_Tp>::value, _Tp>::type
 rotl(_Tp __t, unsigned int __cnt) noexcept
 {
-	const unsigned int _N = std::numeric_limits<_Tp>::digits;
-	return __cnt % _N == 0
-		? __t
-		: (__t << (__cnt % _N)) | (__t >> (_N - (__cnt % _N)));
+    const unsigned int _N = std::numeric_limits<_Tp>::digits;
+    return __cnt % _N == 0
+        ? __t
+        : (__t << (__cnt % _N)) | (__t >> (_N - (__cnt % _N)));
 }
 
 // rotr
@@ -89,11 +89,12 @@ template<class _Tp>
 constexpr typename std::enable_if<__is_unsigned_integer<_Tp>::value, _Tp>::type
 rotr(_Tp __t, unsigned int __cnt) noexcept
 {
-	const unsigned int _N = std::numeric_limits<_Tp>::digits;
-	return __cnt % _N == 0
-		? __t
-		: (__t >> (__cnt % _N)) | (__t << (_N - (__cnt % _N)));
+    const unsigned int _N = std::numeric_limits<_Tp>::digits;
+    return __cnt % _N == 0
+        ? __t
+        : (__t >> (__cnt % _N)) | (__t << (_N - (__cnt % _N)));
 }
+
 
 
 // countl_zero
@@ -115,9 +116,10 @@ constexpr int countl_zero(std::byte __b) noexcept
 }
 
 
-// TODO: This doesn't work for unsigned types larger than ULL - like __uint128_t
 template<class _Tp>
-constexpr typename std::enable_if<__is_unsigned_integer<_Tp>::value, int>::type
+constexpr typename std::enable_if<
+        __is_unsigned_integer<_Tp>::value && (sizeof(_Tp) <= sizeof(unsigned long long)),
+    int>::type
 countl_zero(_Tp __t) noexcept
 {
     return __t != 0
@@ -125,6 +127,30 @@ countl_zero(_Tp __t) noexcept
             - (std::numeric_limits<unsigned long long>::digits - std::numeric_limits<_Tp>::digits)  
         : std::numeric_limits<_Tp>::digits;
 }
+
+template<class _Tp>
+constexpr typename std::enable_if<
+        __is_unsigned_integer<_Tp>::value && (sizeof(_Tp) > sizeof(unsigned long long)),
+    int>::type
+countl_zero(_Tp __t) noexcept
+{
+    if (__t == 0)
+        return std::numeric_limits<_Tp>::digits;
+    
+    int __ret = 0;
+    int __iter = 0;
+    const unsigned int __ulldigits = std::numeric_limits<unsigned long long>::digits;
+    while (true) {
+        __t = rotr<_Tp>(__t, __ulldigits);
+        if ((__iter = countl_zero(static_cast<unsigned long long>(__t))) != __ulldigits)
+            break;
+        __ret += __iter;
+        }
+    return __ret + __iter;
+}
+
+
+
 
 // countl_one
 template<class _Tp>
@@ -135,6 +161,16 @@ countl_one(_Tp __t) noexcept
         ? countl_zero(static_cast<_Tp>(~__t))
         : std::numeric_limits<_Tp>::digits;
 }
+
+
+constexpr int countl_one(std::byte __b) noexcept
+{
+//  If I could assume that sizeof(byte) < sizeof(unsigned int), I could simplify this a lot
+    return __b != std::numeric_limits<std::byte>::max()
+        ? countl_zero(static_cast<std::byte>(~__b))
+        : std::numeric_limits<std::byte>::digits;
+}
+
 
 
 // countr_zero
@@ -154,15 +190,39 @@ constexpr int countr_zero(std::byte __b) noexcept
         : std::numeric_limits<unsigned char>::digits;
 }
 
-// TODO: This doesn't work for unsigned types larger than ULL - like __uint128_t
 template<class _Tp>
-constexpr typename std::enable_if<__is_unsigned_integer<_Tp>::value, int>::type
+constexpr typename std::enable_if<
+        __is_unsigned_integer<_Tp>::value && (sizeof(_Tp) <= sizeof(unsigned long long)),
+    int>::type
 countr_zero(_Tp __t) noexcept
 {
     return __t != 0
         ? countr_zero(static_cast<unsigned long long>(__t))
         : std::numeric_limits<_Tp>::digits;
 }
+
+
+template<class _Tp>
+constexpr typename std::enable_if<
+        __is_unsigned_integer<_Tp>::value && (sizeof(_Tp) > sizeof(unsigned long long)),
+    int>::type
+countr_zero(_Tp __t) noexcept
+{
+    if (__t == 0)
+        return std::numeric_limits<_Tp>::digits;
+    
+    int __ret = 0;
+    int __iter = 0;
+    const unsigned int __ulldigits = std::numeric_limits<unsigned long long>::digits;
+    while ((__iter = countr_zero(static_cast<unsigned long long>(__t))) == __ulldigits)
+    {
+        __ret += __iter;
+        __t >>= __ulldigits;
+    }
+    return __ret + __iter;
+}
+
+
 
 
 // countr_one
@@ -176,6 +236,15 @@ countr_one(_Tp __t) noexcept
 }
 
 
+constexpr int countr_one(std::byte __b) noexcept
+{
+//  If I could assume that sizeof(byte) < sizeof(unsigned int), I could simplify this a lot
+    return __b != std::numeric_limits<std::byte>::max()
+        ? countr_zero(static_cast<std::byte>(~__b))
+        : std::numeric_limits<std::byte>::digits;
+}
+
+
 // popcount
 constexpr int popcount(unsigned int __i)       noexcept { return __builtin_popcount  (__i); }
 constexpr int popcount(unsigned long __i)      noexcept { return __builtin_popcountl (__i); }
@@ -183,13 +252,31 @@ constexpr int popcount(unsigned long long __i) noexcept { return __builtin_popco
 constexpr int popcount(std::byte __b)          noexcept { return __builtin_popcount  (static_cast<unsigned int>(__b)); }
 
 
-// TODO: This doesn't work for unsigned types larger than ULL - like __uint128_t
 template<class _Tp>
-constexpr typename std::enable_if<__is_unsigned_integer<_Tp>::value, int>::type
+constexpr typename std::enable_if<
+        __is_unsigned_integer<_Tp>::value && (sizeof(_Tp) <= sizeof(unsigned long long)),
+    int>::type
 popcount(_Tp __t) noexcept
 {
     return popcount(static_cast<unsigned long long>(__t));
 }
+
+
+template<class _Tp>
+constexpr typename std::enable_if<
+        __is_unsigned_integer<_Tp>::value && (sizeof(_Tp) > sizeof(unsigned long long)),
+    int>::type
+popcount(_Tp __t) noexcept
+{
+    int __ret = 0;
+    while (__t != 0) // not a fixed loop here b/c we can exit early
+    {
+        __ret += popcount(static_cast<unsigned long long>(__t));
+        __t >>= std::numeric_limits<unsigned long long>::digits;
+    }
+    return __ret;
+}
+
 
 
 // integral log base 2
@@ -270,7 +357,7 @@ constexpr int t_popcount (unsigned long long i)
 int main ()
 {
 
-//	Not - unsigned types
+//  Not - unsigned types
     static_assert(!std_bit::__is_unsigned_integer<bool>::value, "");
     static_assert(!std_bit::__is_unsigned_integer<signed char>::value, "");
     static_assert(!std_bit::__is_unsigned_integer<char>::value, "");
@@ -278,9 +365,9 @@ int main ()
 //     static_assert(!std_bit::__is_unsigned_integer<char8_t>::value, "");
     static_assert(!std_bit::__is_unsigned_integer<char16_t>::value, "");
     static_assert(!std_bit::__is_unsigned_integer<char32_t>::value, "");
-	static_assert(!std_bit::__is_unsigned_integer<int8_t>::value, "");
-	static_assert(!std_bit::__is_unsigned_integer<int16_t>::value, "");
-	static_assert(!std_bit::__is_unsigned_integer<int32_t>::value, "");
+    static_assert(!std_bit::__is_unsigned_integer<int8_t>::value, "");
+    static_assert(!std_bit::__is_unsigned_integer<int16_t>::value, "");
+    static_assert(!std_bit::__is_unsigned_integer<int32_t>::value, "");
     static_assert(!std_bit::__is_unsigned_integer<int>::value, "");
     static_assert(!std_bit::__is_unsigned_integer<long>::value, "");
     static_assert(!std_bit::__is_unsigned_integer<long long>::value, "");
@@ -290,10 +377,10 @@ int main ()
 
 
     static_assert( std_bit::__is_unsigned_integer<unsigned char>::value, "");
-	static_assert( std_bit::__is_unsigned_integer<uint8_t>::value, "");
-	static_assert( std_bit::__is_unsigned_integer<uint16_t>::value, "");
-	static_assert( std_bit::__is_unsigned_integer<uint32_t>::value, "");
-	static_assert( std_bit::__is_unsigned_integer<size_t>::value, "");
+    static_assert( std_bit::__is_unsigned_integer<uint8_t>::value, "");
+    static_assert( std_bit::__is_unsigned_integer<uint16_t>::value, "");
+    static_assert( std_bit::__is_unsigned_integer<uint32_t>::value, "");
+    static_assert( std_bit::__is_unsigned_integer<size_t>::value, "");
     static_assert( std_bit::__is_unsigned_integer<unsigned int>::value, "");
     static_assert( std_bit::__is_unsigned_integer<unsigned long>::value, "");
     static_assert( std_bit::__is_unsigned_integer<unsigned long long>::value, "");
@@ -303,10 +390,16 @@ int main ()
     static_assert( std_bit::__is_unsigned_integer<uintptr_t>::value, "");
 
     {
-    static_assert( std_bit::countl_zero(23U)           == std::numeric_limits<unsigned int>::digits       - 5, "");
-    static_assert( std_bit::countl_zero(23UL)          == std::numeric_limits<unsigned long>::digits      - 5, "");
-    static_assert( std_bit::countl_zero(23ULL)         == std::numeric_limits<unsigned long long>::digits - 5, "");
-    static_assert( std_bit::countl_zero(std::byte{23}) == std::numeric_limits<unsigned char>::digits      - 5, "");
+    static_assert( std_bit::countl_zero(23U)             == std::numeric_limits<unsigned int>::digits       - 5, "");
+    static_assert( std_bit::countl_zero(23UL)            == std::numeric_limits<unsigned long>::digits      - 5, "");
+    static_assert( std_bit::countl_zero(23ULL)           == std::numeric_limits<unsigned long long>::digits - 5, "");
+    static_assert( std_bit::countl_zero(__uint128_t{23}) == std::numeric_limits<__uint128_t>::digits        - 5, "");
+    static_assert( std_bit::countl_zero(std::byte{23})   == std::numeric_limits<unsigned char>::digits      - 5, "");
+
+    static_assert( std_bit::countl_zero(             0x1234123412341234U) == 3, "");
+    static_assert( std_bit::countl_zero( __uint128_t{0x1234123412341234}) == 67, "");
+    static_assert( std_bit::countl_zero( __uint128_t{0x1234123412341234} << 64) == 3, "");
+    static_assert( std_bit::countl_zero((__uint128_t{0x1234123412341234} << 64 ) | 0x1234123412341234) == 3, "");
 
     static_assert( std_bit::countl_zero(0U)           == std::numeric_limits<unsigned>::digits,           "");
     static_assert( std_bit::countl_zero(0UL)          == std::numeric_limits<unsigned long>::digits,      "");
@@ -315,27 +408,83 @@ int main ()
     }
 
     {
-    static_assert( std_bit::countr_zero(23U)           == 0, "");
-    static_assert( std_bit::countr_zero(23UL)          == 0, "");
-    static_assert( std_bit::countr_zero(23ULL)         == 0, "");
-    static_assert( std_bit::countr_zero(std::byte{23}) == 0, "");
+    static_assert( std_bit::countl_one(23U)             == 0, "");
+    static_assert( std_bit::countl_one(23UL)            == 0, "");
+    static_assert( std_bit::countl_one(23ULL)           == 0, "");
+    static_assert( std_bit::countl_one(__uint128_t{23}) == 0, "");
+    static_assert( std_bit::countl_one(std::byte{23})   == 0, "");
 
-    static_assert( std_bit::countr_zero(0U)           == std::numeric_limits<unsigned>::digits,           "");
-    static_assert( std_bit::countr_zero(0UL)          == std::numeric_limits<unsigned long>::digits,      "");
-    static_assert( std_bit::countr_zero(0ULL)         == std::numeric_limits<unsigned long long>::digits, "");
-    static_assert( std_bit::countr_zero(std::byte{0}) == std::numeric_limits<unsigned char>::digits, "");
+    static_assert( std_bit::countl_one(             0xFE34123412341234U) == 7, "");
+    static_assert( std_bit::countl_one( __uint128_t{0xFE34123412341234}) == 0, "");
+    static_assert( std_bit::countl_one( __uint128_t{0xFE34123412341234} << 64) == 7, "");
+    static_assert( std_bit::countl_one((__uint128_t{0xFE34123412341234} << 64 ) | 0x1234123412341234) == 7, "");
+
+    static_assert( std_bit::countl_one(0U)           == 0, "");
+    static_assert( std_bit::countl_one(0UL)          == 0, "");
+    static_assert( std_bit::countl_one(0ULL)         == 0, "");
+    static_assert( std_bit::countl_one(std::byte{0}) == 0, "");
     }
 
     {
-    static_assert( std_bit::popcount(23U)           == 4, "");
-    static_assert( std_bit::popcount(23UL)          == 4, "");
-    static_assert( std_bit::popcount(23ULL)         == 4, "");
-    static_assert( std_bit::popcount(std::byte{23}) == 4, "");
+    static_assert( std_bit::countr_zero(23U)             == 0, "");
+    static_assert( std_bit::countr_zero(23UL)            == 0, "");
+    static_assert( std_bit::countr_zero(23ULL)           == 0, "");
+    static_assert( std_bit::countr_zero(__uint128_t{23}) == 0, "");
+    static_assert( std_bit::countr_zero(std::byte{23})   == 0, "");
 
-    static_assert( std_bit::popcount(0U)            == 0, "");
-    static_assert( std_bit::popcount(0UL)           == 0, "");
-    static_assert( std_bit::popcount(0ULL)          == 0, "");
-    static_assert( std_bit::popcount(std::byte{})   == 0, "");
+    static_assert( std_bit::countr_zero(             0x1234123412341234U) == 2, "");
+    static_assert( std_bit::countr_zero( __uint128_t{0x1234123412341234}) == 2, "");
+    static_assert( std_bit::countr_zero( __uint128_t{0x1234123412341234} << 64) == 66, "");
+    static_assert( std_bit::countr_zero((__uint128_t{0x1234123412341234} << 64 ) | 0x1234123412341234) == 2, "");
+
+    static_assert( std_bit::countr_zero(0U)             == std::numeric_limits<unsigned>::digits,           "");
+    static_assert( std_bit::countr_zero(0UL)            == std::numeric_limits<unsigned long>::digits,      "");
+    static_assert( std_bit::countr_zero(0ULL)           == std::numeric_limits<unsigned long long>::digits, "");
+    static_assert( std_bit::countr_zero(__uint128_t{0}) == std::numeric_limits<__uint128_t>::digits, "");
+    static_assert( std_bit::countr_zero(std::byte{0})   == std::numeric_limits<unsigned char>::digits, "");
+    }
+
+    {
+    static_assert( std_bit::countr_one(23U)             == 3, "");
+    static_assert( std_bit::countr_one(23UL)            == 3, "");
+    static_assert( std_bit::countr_one(23ULL)           == 3, "");
+    static_assert( std_bit::countr_one(__uint128_t{23}) == 3, "");
+    static_assert( std_bit::countr_one(std::byte{23})   == 3, "");
+
+    static_assert( std_bit::countr_one(             0x1234123412341234U) == 0, "");
+    static_assert( std_bit::countr_one( __uint128_t{0x1234123412341234}) == 0, "");
+    static_assert( std_bit::countr_one( __uint128_t{0x1234123412341234} << 64) == 0, "");
+    static_assert( std_bit::countr_one((__uint128_t{0x1234123412341234} << 64 ) | 0x1234123412341234) == 0, "");
+
+    static_assert( std_bit::countr_one(0U)             == 0, "");
+    static_assert( std_bit::countr_one(0UL)            == 0, "");
+    static_assert( std_bit::countr_one(0ULL)           == 0, "");
+    static_assert( std_bit::countr_one(__uint128_t{0}) == 0, "");
+    static_assert( std_bit::countr_one(std::byte{0})   == 0, "");
+    }
+
+    {
+    static_assert( std_bit::popcount(23U)             == 4, "");
+    static_assert( std_bit::popcount(23UL)            == 4, "");
+    static_assert( std_bit::popcount(23ULL)           == 4, "");
+    static_assert( std_bit::popcount(__uint128_t{23}) == 4, "");
+    static_assert( std_bit::popcount(std::byte{23})   == 4, "");
+
+    static_assert( std_bit::popcount(0x12341234U)             == 10, "");
+    static_assert( std_bit::popcount(0x12341234UL)            == 10, "");
+    static_assert( std_bit::popcount(0x12341234ULL)           == 10, "");
+    static_assert( std_bit::popcount(__uint128_t{0x12341234}) == 10, "");
+
+    static_assert( std_bit::popcount(             0x1234123412341234U) == 20, "");
+    static_assert( std_bit::popcount( __uint128_t{0x1234123412341234}) == 20, "");
+    static_assert( std_bit::popcount( __uint128_t{0x1234123412341234} << 64) == 20, "");
+    static_assert( std_bit::popcount((__uint128_t{0x1234123412341234} << 64 ) | 0x1234123412341234) == 40, "");
+
+    static_assert( std_bit::popcount(0U)             == 0, "");
+    static_assert( std_bit::popcount(0UL)            == 0, "");
+    static_assert( std_bit::popcount(0ULL)           == 0, "");
+    static_assert( std_bit::popcount(__uint128_t{0}) == 0, "");
+    static_assert( std_bit::popcount(std::byte{})    == 0, "");
 
     for (unsigned int i = 0; i < 255; ++i)
         assert(std_bit::popcount(std::byte(i)) == t_popcount(i));
@@ -346,8 +495,8 @@ int main ()
 
     for (unsigned int i = 0; i < std::numeric_limits<unsigned>::digits; ++i)
     {
-	    assert(std_bit::rotl(1U, i) == 1U << i);
-    	assert(std_bit::rotr(1U, i) == 1U << (std::numeric_limits<unsigned>::digits - i));
+        assert(std_bit::rotl(1U, i) == 1U << i);
+        assert(std_bit::rotr(1U, i) == 1U << (std::numeric_limits<unsigned>::digits - i));
     }
 
     for (unsigned long i = 1; i < 10000000; ++i)
