@@ -10,7 +10,7 @@ Notes:
     using difference_type = view::difference_type;
 
 //  iterator and const_iterator should be "implementation-defined"
-    
+
 //  I'd really rather that 'view' be called 'view_type'
 //  where are the literals? --> "abc"fs
 
@@ -38,7 +38,17 @@ Consider:
    auto fs5 = make_fixed_string(arr5); // what is fs5.size()?
    auto fsN = make_fixed_string(arrN); // what is fsN.size()?
    auto fs9 = make_fixed_string(arr9); // what is fs9.size()?
-   
+
+
+==== Round 2
+
+* `front`/`back` can't be noexcept, because empty strings (but &null?)
+* What's the deal with `at` being noexcept?
+* What's the relationship between `size()` and `capacity()`?
+--> How does this support embedded nulls?
+--> is `fs.length() == N)` an invariant?
+--> is `fs.length() == strlen(fs.c_str())` an invariant?
+
 */
 
 namespace _STD = _VSTD;
@@ -47,183 +57,195 @@ namespace _STD = _VSTD;
 template <class _CharT, size_t _Sz>
     class basic_fixed_string;
 
-//	basic_fixed_string nonmember concatenation functions
-template <class _CharT, size_t L, size_t R>
-    constexpr basic_fixed_string<_CharT, L + R> 
-    operator+(const basic_fixed_string<_CharT, L>& lhs,
-              const basic_fixed_string<_CharT, R>& rhs) noexcept;
+template <class _CharT, size_t _Sz1, size_t _Sz2>
+    constexpr basic_fixed_string<_CharT, _Sz1 + _Sz2>
+        __concat_fixed_string(const _CharT *__p1, const _CharT *__p2) noexcept
+    { return basic_fixed_string<_CharT, _Sz1 + _Sz2>::__make_fixed_string2<_Sz1, _Sz2>(__p1, __p2); }
 
-template <class _CharT, size_t L, size_t R>
-    constexpr basic_fixed_string<_CharT, L + R - 1>
-    operator+(const _CharT(&lhs)[L], 
-              const basic_fixed_string<_CharT, R> &rhs) noexcept;
+//  basic_fixed_string nonmember concatenation functions
+template <class _CharT, size_t _LSz, size_t _RSz>
+    constexpr basic_fixed_string<_CharT, _LSz + _RSz>
+    operator+(const basic_fixed_string<_CharT, _LSz>& __lhs,
+              const basic_fixed_string<_CharT, _RSz>& __rhs) noexcept
+    { return __concat_fixed_string<_CharT, _LSz, _RSz>(__lhs.data(), __rhs.data()); }
+
+
+template <class _CharT, size_t _LSz, size_t _RSz>
+    constexpr basic_fixed_string<_CharT, _LSz + _RSz - 1>
+    operator+(const _CharT(&__lhs)[_LSz],
+              const basic_fixed_string<_CharT, _RSz> &__rhs) noexcept
+    { return __concat_fixed_string<_CharT, _LSz - 1, _RSz>(__lhs, __rhs.data()); }
 
 template <class _CharT, size_t _Sz>
     constexpr basic_fixed_string<_CharT, _Sz + 1>
-    operator+(_CharT lhs, const basic_fixed_string<_CharT, _Sz>& rhs) noexcept;
+    operator+(_CharT __lhs, const basic_fixed_string<_CharT, _Sz>& __rhs) noexcept
+    { return __concat_fixed_string<_CharT, 1, _Sz>(&__lhs, __rhs.data()); }
 
 
-template <class _CharT, size_t L, size_t R>
-	constexpr basic_fixed_string<_CharT, L + R - 1>
-	operator+(const basic_fixed_string<_CharT, L> &lhs,
-	          const _CharT(&rhs)[R]) noexcept;
+template <class _CharT, size_t _LSz, size_t _RSz>
+    constexpr basic_fixed_string<_CharT, _LSz + _RSz - 1>
+    operator+(const basic_fixed_string<_CharT, _LSz> &__lhs,
+              const _CharT(&__rhs)[_RSz]) noexcept
+    { return __concat_fixed_string<_CharT, _LSz, _RSz - 1>(__lhs.data(), __rhs); }
 
 template <class _CharT, size_t _Sz>
-	constexpr basic_fixed_string<_CharT, _Sz + 1>
-	operator+(const basic_fixed_string<_CharT, _Sz>& lhs, _CharT rhs) noexcept;
+    constexpr basic_fixed_string<_CharT, _Sz + 1>
+    operator+(const basic_fixed_string<_CharT, _Sz>& __lhs, _CharT __rhs) noexcept
+    { return __concat_fixed_string<_CharT, _Sz, 1>(__lhs.data(), &__rhs); }
 
 
-//	basic_fixed_string nonmember comparison functions
-template <class _CharT, size_t L, size_t R>
-    constexpr bool operator==(const basic_fixed_string<_CharT, L> &__lhs,
-                              const basic_fixed_string<_CharT, R> &__rhs) noexcept;
+//  basic_fixed_string nonmember comparison functions
+template <class _CharT, size_t _LSz, size_t _RSz>
+    constexpr bool operator==(const basic_fixed_string<_CharT, _LSz> &__lhs,
+                              const basic_fixed_string<_CharT, _RSz> &__rhs) noexcept;
 
-template <class _CharT, size_t L, size_t R>
-	constexpr bool operator==(const _CharT(&__lhs)[L],
-                              const basic_fixed_string<_CharT, R> &__rhs) noexcept;
+template <class _CharT, size_t _LSz, size_t _RSz>
+    constexpr bool operator==(const _CharT(&__lhs)[_LSz],
+                              const basic_fixed_string<_CharT, _RSz> &__rhs) noexcept;
 
-template <class _CharT, size_t L, size_t R>
-	constexpr bool operator==(const basic_fixed_string<_CharT, L> &__lhs,
-                              const _CharT(&__rhs)[R]) noexcept;
-
-
-template <class _CharT, size_t L, size_t R>
-    constexpr bool operator!=(const basic_fixed_string<_CharT, L> &__lhs,
-                              const basic_fixed_string<_CharT, R> &__rhs) noexcept
-	{ return !(__lhs == __rhs);}
-	
-template <class _CharT, size_t L, size_t R>
-	constexpr bool operator!=(const _CharT(&__lhs)[L],
-                              const basic_fixed_string<_CharT, R> &__rhs) noexcept
-	{ return !(__lhs == __rhs);}
-
-template <class _CharT, size_t L, size_t R>
-	constexpr bool operator!=(const basic_fixed_string<_CharT, L> &__lhs,
-                              const _CharT(&__rhs)[R]) noexcept
-	{ return !(__lhs == __rhs);}
+template <class _CharT, size_t _LSz, size_t _RSz>
+    constexpr bool operator==(const basic_fixed_string<_CharT, _LSz> &__lhs,
+                              const _CharT(&__rhs)[_RSz]) noexcept;
 
 
-template <class _CharT, size_t L, size_t R>
-    constexpr bool operator< (const basic_fixed_string<_CharT, L> &__lhs,
-                              const basic_fixed_string<_CharT, R> &__rhs) noexcept;
+template <class _CharT, size_t _LSz, size_t _RSz>
+    constexpr bool operator!=(const basic_fixed_string<_CharT, _LSz> &__lhs,
+                              const basic_fixed_string<_CharT, _RSz> &__rhs) noexcept
+    { return !(__lhs == __rhs);}
+    
+template <class _CharT, size_t _LSz, size_t _RSz>
+    constexpr bool operator!=(const _CharT(&__lhs)[_LSz],
+                              const basic_fixed_string<_CharT, _RSz> &__rhs) noexcept
+    { return !(__lhs == __rhs);}
 
-template <class _CharT, size_t L, size_t R>
-	constexpr bool operator< (const _CharT(&__lhs)[L],
-                              const basic_fixed_string<_CharT, R> &__rhs) noexcept;
-
-template <class _CharT, size_t L, size_t R>
-	constexpr bool operator< (const basic_fixed_string<_CharT, L> &__lhs,
-                              const _CharT(&__rhs)[R]) noexcept;
-
-
-template <class _CharT, size_t L, size_t R>
-    constexpr bool operator> (const basic_fixed_string<_CharT, L> &__lhs,
-                              const basic_fixed_string<_CharT, R> &__rhs) noexcept;
-
-template <class _CharT, size_t L, size_t R>
-	constexpr bool operator> (const _CharT(&__lhs)[L],
-                              const basic_fixed_string<_CharT, R> &__rhs) noexcept;
-
-template <class _CharT, size_t L, size_t R>
-	constexpr bool operator> (const basic_fixed_string<_CharT, L> &__lhs,
-                              const _CharT(&__rhs)[R]) noexcept;
+template <class _CharT, size_t _LSz, size_t _RSz>
+    constexpr bool operator!=(const basic_fixed_string<_CharT, _LSz> &__lhs,
+                              const _CharT(&__rhs)[_RSz]) noexcept
+    { return !(__lhs == __rhs);}
 
 
-template <class _CharT, size_t L, size_t R>
-    constexpr bool operator<=(const basic_fixed_string<_CharT, L> &__lhs,
-                              const basic_fixed_string<_CharT, R> &__rhs) noexcept;
+template <class _CharT, size_t _LSz, size_t _RSz>
+    constexpr bool operator< (const basic_fixed_string<_CharT, _LSz> &__lhs,
+                              const basic_fixed_string<_CharT, _RSz> &__rhs) noexcept;
 
-template <class _CharT, size_t L, size_t R>
-	constexpr bool operator<=(const _CharT(&__lhs)[L],
-                              const basic_fixed_string<_CharT, R> &__rhs) noexcept;
+template <class _CharT, size_t _LSz, size_t _RSz>
+    constexpr bool operator< (const _CharT(&__lhs)[_LSz],
+                              const basic_fixed_string<_CharT, _RSz> &__rhs) noexcept;
 
-template <class _CharT, size_t L, size_t R>
-	constexpr bool operator<=(const basic_fixed_string<_CharT, L> &__lhs,
-                              const _CharT(&__rhs)[R]) noexcept;
+template <class _CharT, size_t _LSz, size_t _RSz>
+    constexpr bool operator< (const basic_fixed_string<_CharT, _LSz> &__lhs,
+                              const _CharT(&__rhs)[_RSz]) noexcept;
 
-template <class _CharT, size_t L, size_t R>
-    constexpr bool operator>=(const basic_fixed_string<_CharT, L> &__lhs,
-                              const basic_fixed_string<_CharT, R> &__rhs) noexcept;
 
-template <class _CharT, size_t L, size_t R>
-	constexpr bool operator>=(const _CharT(&__lhs)[L],
-                              const basic_fixed_string<_CharT, R> &__rhs) noexcept;
+template <class _CharT, size_t _LSz, size_t _RSz>
+    constexpr bool operator> (const basic_fixed_string<_CharT, _LSz> &__lhs,
+                              const basic_fixed_string<_CharT, _RSz> &__rhs) noexcept;
 
-template <class _CharT, size_t L, size_t R>
-	constexpr bool operator>=(const basic_fixed_string<_CharT, L> &__lhs,
-                              const _CharT(&__rhs)[R]) noexcept;
+template <class _CharT, size_t _LSz, size_t _RSz>
+    constexpr bool operator> (const _CharT(&__lhs)[_LSz],
+                              const basic_fixed_string<_CharT, _RSz> &__rhs) noexcept;
 
-//	swap
+template <class _CharT, size_t _LSz, size_t _RSz>
+    constexpr bool operator> (const basic_fixed_string<_CharT, _LSz> &__lhs,
+                              const _CharT(&__rhs)[_RSz]) noexcept;
+
+
+template <class _CharT, size_t _LSz, size_t _RSz>
+    constexpr bool operator<=(const basic_fixed_string<_CharT, _LSz> &__lhs,
+                              const basic_fixed_string<_CharT, _RSz> &__rhs) noexcept;
+
+template <class _CharT, size_t _LSz, size_t _RSz>
+    constexpr bool operator<=(const _CharT(&__lhs)[_LSz],
+                              const basic_fixed_string<_CharT, _RSz> &__rhs) noexcept;
+
+template <class _CharT, size_t _LSz, size_t _RSz>
+    constexpr bool operator<=(const basic_fixed_string<_CharT, _LSz> &__lhs,
+                              const _CharT(&__rhs)[_RSz]) noexcept;
+
+template <class _CharT, size_t _LSz, size_t _RSz>
+    constexpr bool operator>=(const basic_fixed_string<_CharT, _LSz> &__lhs,
+                              const basic_fixed_string<_CharT, _RSz> &__rhs) noexcept;
+
+template <class _CharT, size_t _LSz, size_t _RSz>
+    constexpr bool operator>=(const _CharT(&__lhs)[_LSz],
+                              const basic_fixed_string<_CharT, _RSz> &__rhs) noexcept;
+
+template <class _CharT, size_t _LSz, size_t _RSz>
+    constexpr bool operator>=(const basic_fixed_string<_CharT, _LSz> &__lhs,
+                              const _CharT(&__rhs)[_RSz]) noexcept;
+
+//  swap
 template <class _CharT, size_t _Sz>
-	constexpr void swap(basic_fixed_string<_CharT, _Sz>& __lhs, 
-	                    basic_fixed_string<_CharT, _Sz>& __rhs) noexcept;
+    constexpr void swap(basic_fixed_string<_CharT, _Sz>& __lhs,
+                        basic_fixed_string<_CharT, _Sz>& __rhs) noexcept;
 
 
-//	basic_fixed_string type aliases template <size_t _Sz>
+//  basic_fixed_string type aliases template <size_t _Sz>
 template <size_t _Sz>
-	using fixed_string = basic_fixed_string<char, _Sz>; 
+    using fixed_string = basic_fixed_string<char, _Sz>;
 
 template <size_t _Sz>
-	using fixed_u16string = basic_fixed_string<char16_t, _Sz>;
+    using fixed_u16string = basic_fixed_string<char16_t, _Sz>;
 
 template <size_t _Sz>
-	using fixed_u32string = basic_fixed_string<char32_t, _Sz>;
+    using fixed_u32string = basic_fixed_string<char32_t, _Sz>;
 
 template <size_t _Sz>
-	using fixed_wstring = basic_fixed_string<wchar_t, _Sz>;
+    using fixed_wstring = basic_fixed_string<wchar_t, _Sz>;
 
 
-//	numeric conversions
+//  numeric conversions
 template <size_t _Sz>
-	constexpr int stoi(const fixed_string<_Sz>& str, int base = 10);
-	
+    constexpr int stoi(const fixed_string<_Sz>& str, int base = 10);
+    
 template <size_t _Sz>
-	constexpr unsigned stou(const fixed_string<_Sz>& str, int base = 10);
-	
+    constexpr unsigned stou(const fixed_string<_Sz>& str, int base = 10);
+    
 template <size_t _Sz>
-	constexpr long stol(const fixed_string<_Sz>& str, int base = 10);
-	
+    constexpr long stol(const fixed_string<_Sz>& str, int base = 10);
+    
 template <size_t _Sz>
-	constexpr unsigned long stoul(const fixed_string<_Sz>& str, int base = 10);
-	
+    constexpr unsigned long stoul(const fixed_string<_Sz>& str, int base = 10);
+    
 template <size_t _Sz>
-	constexpr long long stoll(const fixed_string<_Sz>& str, int base = 10);
-	
+    constexpr long long stoll(const fixed_string<_Sz>& str, int base = 10);
+    
 template <size_t _Sz>
-	constexpr unsigned long long stoull(const fixed_string<_Sz>& str, int base = 10);
+    constexpr unsigned long long stoull(const fixed_string<_Sz>& str, int base = 10);
 
 template <size_t _Sz>
-	constexpr float stof(const fixed_string<_Sz>& str);
+    constexpr float stof(const fixed_string<_Sz>& str);
 
 template <size_t _Sz>
-	constexpr double stod(const fixed_string<_Sz>& str);
-	
+    constexpr double stod(const fixed_string<_Sz>& str);
+    
 template <size_t _Sz>
-	constexpr long double stold(const fixed_string<_Sz>& str);
+    constexpr long double stold(const fixed_string<_Sz>& str);
 
 // template <int val>
-// 	constexpr fixed_string</*...*/> to_fixed_string_i() noexcept;
-// 
+//  constexpr fixed_string</*...*/> to_fixed_string_i() noexcept;
+//
 // template <unsigned val>
-// 	constexpr fixed_string</*...*/> to_fixed_string_u() noexcept;
-// 	
+//  constexpr fixed_string</*...*/> to_fixed_string_u() noexcept;
+//  
 // template <long val>
-// 	constexpr fixed_string</*...*/> to_fixed_string_l() noexcept;
-// 	
+//  constexpr fixed_string</*...*/> to_fixed_string_l() noexcept;
+//  
 // template <unsigned long val>
-// 	constexpr fixed_string</*...*/> to_fixed_string_ul() noexcept;
-// 	
+//  constexpr fixed_string</*...*/> to_fixed_string_ul() noexcept;
+//  
 // template <long long val>
-// 	constexpr fixed_string</*...*/> to_fixed_string_ll() noexcept;
-// 	
+//  constexpr fixed_string</*...*/> to_fixed_string_ll() noexcept;
+//  
 // template <unsigned long long val>
-// 	constexpr fixed_string</*...*/> to_fixed_string_ull() noexcept;
+//  constexpr fixed_string</*...*/> to_fixed_string_ull() noexcept;
 
-//	XY._Sz+6, creation helper function template <class _CharT, size_t _Sz>
+//  creation helper function template <class _CharT, size_t _Sz>
 template <class _CharT, size_t _Sz>
-	constexpr basic_fixed_string<_CharT, _Sz - 1>
-		make_fixed_string(const _CharT(&a)[_Sz]) noexcept;
-	
+    constexpr basic_fixed_string<_CharT, _Sz - 1>
+        make_fixed_string(const _CharT(&__arr)[_Sz]) noexcept
+    { return basic_fixed_string<_CharT, _Sz - 1>::__make_fixed_string1(__arr); }
+
 
 template <class _CharT, size_t _Sz>
 class basic_fixed_string {
@@ -242,7 +264,15 @@ public:
     using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
     static constexpr size_type npos = view::npos;
+    
+//  This is what I want....
+//  template <size_t ..._Sizes>
+//    static constexpr basic_fixed_string __make_fixed_string(const _CharT * ...__Ptrs);
 
+    static constexpr basic_fixed_string __make_fixed_string1(const _CharT * __p);
+    template <size_t _Sz1, size_t _Sz2>
+        static constexpr basic_fixed_string __make_fixed_string2(const _CharT * __p1, const _CharT * __p2);
+    
 //  construct/copy/conversions
     constexpr basic_fixed_string() noexcept;
     constexpr basic_fixed_string(const basic_fixed_string& __str) noexcept;
@@ -250,7 +280,7 @@ public:
 
     constexpr basic_fixed_string& operator=(const basic_fixed_string& __str) noexcept;
     constexpr basic_fixed_string& operator=(const _CharT(&__arr)[_Sz + 1]) noexcept;
-    constexpr operator view() const noexcept;
+    constexpr operator view() const noexcept { return view{data(), size()}; }
 
 //  iterators
     constexpr iterator               begin()         noexcept;
@@ -278,7 +308,7 @@ public:
     constexpr       reference operator[](size_type __pos)       noexcept;
     constexpr const_reference at        (size_type __pos) const noexcept;
     constexpr       reference at        (size_type __pos)       noexcept;
-    
+
     constexpr const_reference front() const noexcept;
     constexpr       reference front()       noexcept;
     constexpr const_reference back()  const noexcept;
@@ -324,7 +354,7 @@ public:
 
 //  template <size_type __pos = 0, size_type count = npos>
 //  constexpr basic_fixed_string<_CharT, /*...*/> substr() const noexcept;
-    
+
     constexpr int compare(view str) const noexcept;
     constexpr int compare(size_type __pos1, size_type __n1, view str) const;
     constexpr int compare(size_type __pos1, size_type __n1, view str, size_type __pos2, size_type __n2 = npos) const;
@@ -333,11 +363,11 @@ public:
     constexpr int compare(size_type __pos1, size_type __n1, const _CharT *__s, size_type __n2) const;
 
 private:
-//  _CharT data_[_Sz+1]; //exposition only
+    _CharT __data[_Sz+1];
 };
 
 } //namespace somestd
 
-int main() 
+int main()
 {
 }
