@@ -14,14 +14,14 @@ struct AtomCallback {
 	
 	void operator() (const M4AFile *f, M4AFile::AtomType atom, size_t start, size_t length, size_t depth)
 	{
-		if ( gDebug )
+		if (gDebug)
 			std::cout << std::string(depth, ' ') << "'" << f->AtomName(atom) << "' (" << length << " bytes)" << std::endl;
 
-		if ( 'stsd' == atom )
+		if ('stsd' == atom)
 		{
-			if ( gDebug )
+			if (gDebug)
 				std::cout << "Found a 'stsd' at offset " << start << std::endl;
-			if ( length < 16 )
+			if (length < 16)
 				throw std::runtime_error("'stsd' atom is too small");
 			isLossless = f->read32 ( start + 12 ) == 0x616C6163 ? 1 : 0;
 		}
@@ -29,7 +29,7 @@ struct AtomCallback {
 };
 
 
-void ProcessAFile(const char *fileName) {
+void ProcessAFile (const char *fileName) {
 	try {
 		M4AFile f(fileName);
 		if (gDebug) {
@@ -41,7 +41,7 @@ void ProcessAFile(const char *fileName) {
 		f.ForEachAtomDo(std::ref(cb));
 		if (cb.isLossless < 0)
 			throw std::runtime_error("does not have a 'stsd' atom");
-		else if ( cb.isLossless == gPrintLossless )
+		else if (cb.isLossless == gPrintLossless)
 			std::cout << fileName << std::endl;
 		}
 	catch (const std::runtime_error &e) {
@@ -49,27 +49,27 @@ void ProcessAFile(const char *fileName) {
 		}
 	}
 
-int main( int argc, char *argv [] )
+int main (int argc, char *argv [])
 {
-	if ( argc == 1 ) {
-		std::cout << "Usage: " << argv[0] << " [-!] [-d] <list of files" << std::endl;
+	if (argc == 1) {
+		std::cout << "Usage: " << argv[0] << " [-!] [-n] [-d] <list of files" << std::endl;
 		std::cout << "  prints the path of files that encoded with Apple lossless encoder" << std::endl;
-		std::cout << "  if -! is specified, prints the path of files NOT encoded lossless" << std::endl;
+		std::cout << "  if -! or -n is specified, prints the path of files NOT encoded lossless" << std::endl;
 		return 0;
 		}
 	
 	int startArg = 1;
-	if ( std::strcmp ( argv[startArg], "-!" ) == 0 ) {
+	if ((std::strcmp ( argv[startArg], "-!" ) == 0) || (std::strcmp ( argv[startArg], "-n" ) == 0)) {
 		gPrintLossless = false;
 		startArg = 2;
 		}
 		
-	if ( std::strcmp ( argv[startArg], "-d" ) == 0 ) {
+	if (std::strcmp ( argv[startArg], "-d" ) == 0) {
 		gDebug = true;
 		startArg++;
 		}
 
- 	for ( int i = startArg; i < argc; ++i )
+ 	for (int i = startArg; i < argc; ++i)
 		ProcessAFile(argv[i]);
 		
 	return 0;
