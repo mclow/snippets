@@ -3,7 +3,94 @@
 #include <limits.h>
 #include <set>
 
-#include "m4a_file.hpp"
+#include "file_helpers.hpp"
+
+//	Doc: http://www-mmsp.ece.mcgill.ca/Documents/AudioFormats/AIFF/Docs/AIFF-1.3.pdf
+
+bool gDebug = false;
+bool gChecksumChunks = false;
+
+class AIFFFile {
+public:
+	typedef uint32_t ChunkType;
+	typedef uint32_t ChunkSize;
+	typedef void (*ChunkProc) (const AIFFFile *f, ChunkType atom, size_t start, size_t length);
+	
+	AIFFFile (const char *fileName) : file(fileName)
+		{
+		if (GetChunkType(0) != 'FORM')
+			throw std::runtime_error("does not have 'FORM' as the first chunk");
+		if (GetChunkSize(0) != size() - 8)
+			throw std::runtime_error("FORM size does not match file size");
+		if (read32(8) != 'AIFF')
+			throw std::runtime_error("expected the form type to be AIFF");
+		}
+
+	~AIFFFile() {}
+	
+	ChunkSize GetChunkSize(size_t offset) const { return read32(offset + 4); }
+	ChunkType GetChunkType(size_t offset) const { return read32(offset); }
+	size_t size() const { return file.size(); }
+
+	std::string ChunkName(ChunkType at) const {
+		std::string retVal ( "    " );
+		const unsigned char *p = (const unsigned char *) &at;
+		for (int i = 3; i >= 0; --i)
+			retVal [ i ] = *p++;
+		return retVal;
+		}
+
+	template <typename CB>
+	void ForEachChunkDo (CB cb) const { ForEachChunkDo(12, size() - 12, cb); }
+	
+	template <typename CB>
+	void ForEachChunkDo (size_t start, size_t length, CB cb) const {
+		size_t offset  = start;
+		size_t end     = start + length;
+	
+		while (offset < end) {
+			ChunkType at = GetChunkType(offset);
+			ChunkSize sz = GetChunkSize(offset);
+//  			std::cout << "# Atom: " << at << " of size " << sz << " at offset " << offset << " with " << end - offset << " bytes left" << std::endl;
+			if (end - offset < sz)
+				throw std::runtime_error(std::string("Chunk '") + ChunkName(at) + "' has a size too big");
+		
+			cb (this, at, offset + 8, sz > 8 ? sz - 8 : 0);
+			offset += sz + 8;
+			}
+		}
+
+// 00000000  46 4f 52 4d 00 7e 89 16  41 49 46 46 43 4f 4d 4d  |FORM.~..AIFFCOMM|
+//	ATOM = 'COMM'; size = 0x00000012
+// 00000010  00 00 00 12 00 02 00 1f  8e 1c 00 10 40 0e ac 44  |............@..D|
+// 00000020  00 00 00 00 00 00 53 53  4e 44 00 7e 38 78 00 00  |......SSND.~8x..|
+//	ATOM = 'SSND'; size = 0x007e3878
+// 00000030  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+
+	const uint8_t * getPointerTo(size_t offset) const
+	{
+		return file.base() + offset;
+	}
+
+	uint32_t read32(size_t offset) const {
+		uint32_t retVal = 0;
+		const uint8_t *p = getPointerTo(offset);
+	
+		for (int i = 0; i < 4; ++i) {
+			retVal <<= 8;
+			retVal |= *p++;
+		}
+
+	return retVal;
+	}
+
+private:
+	MMFile file;
+};
+
+
+char toHex(int i) { return "0123456789ABCDEF"[i]; }
+
 
 // lifted from http://web.mit.edu/freebsd/head/sys/libkern/crc32.c
 const uint32_t crc32_tab[] = {
@@ -65,60 +152,61 @@ crc32(const uint8_t *p, size_t size)
 }
  
 
-struct AtomCallback {
-	AtomCallback (bool doChecksum) : checksumChunks(doChecksum) {}
+struct ChunkCallback {
+	ChunkCallback(int indent = 0) : indentStr(indent, ' ') {}
+	
+	void operator() (const AIFFFile *f, AIFFFile::ChunkType chunk, size_t start, size_t length) {
+		std::cout << indentStr << "'" << f->ChunkName(chunk) << "'"
+				  << " (" << length << " bytes)";
 
-	void operator() (const M4AFile *f, M4AFile::AtomType atom, size_t start, size_t length, size_t depth) {
-		std::cout << std::string(depth, ' ') << "'" << f->AtomName(atom) << "'" << " (" << length << " bytes)";
-
-		if (checksumChunks)
+		if (gChecksumChunks)
 			std::cout << " crc32: " << std::hex << crc32(f->getPointerTo(start), length) << std::dec;
+
 		std::cout << std::endl;
 		}
 
-	bool checksumChunks;
+	std::string indentStr;
 	};
 
 
-void ProcessAFile(const char *fileName, bool debug, bool checksum) {
-	if (debug)
-		std::cout << "Processing " << fileName << std::endl;
+void ProcessAFile(const char *fileName) {
 	try {
-		M4AFile f(fileName);
-		if (debug)
+		AIFFFile f(fileName);
+		if (gDebug) {
+			std::cout << "Processing " << fileName << std::endl;
 			std::cout << "File  is " << f.size() << " bytes long" << std::endl;
+			}
 
-		f.ForEachAtomDo(AtomCallback(checksum));
+		f.ForEachChunkDo(ChunkCallback{});
+		std::cout << std::endl;
 		}
 	catch (const std::runtime_error &e) {
 		std::cerr << "## File '" << fileName << "': " << e.what() << std::endl;
 		}
 	}
 
+
 int main( int argc, char *argv [] )
 {
-	bool checksumChunks = false;
-	bool debug = false;
-
 	if ( argc == 1 ) {
 		std::cout << "Usage: " << argv[0] << "[-d] [-c] <list of files>" << std::endl;
-		std::cout << "  prints the chunks of the M4A files" << std::endl;
+		std::cout << "  prints the chunks of the AIFF files" << std::endl;
 		return 0;
 		}
 	
 	int startArg = 1;
-	if ( std::strcmp (argv[startArg], "-d" ) == 0) {
-		debug = true;
+	if ( std::strcmp ( argv[startArg], "-d" ) == 0 ) {
+		gDebug = true;
 		startArg++;
 		}
 
-	if (std::strcmp (argv[startArg], "-c" ) == 0) {
-		checksumChunks = true;
+	if ( std::strcmp ( argv[startArg], "-c" ) == 0 ) {
+		gChecksumChunks = true;
 		startArg++;
 		}
 
- 	for (int i = startArg; i < argc; ++i)
-		ProcessAFile(argv[i], debug, checksumChunks);
+ 	for ( int i = startArg; i < argc; ++i )
+		ProcessAFile(argv[i]);
 		
 	return 0;
 }
