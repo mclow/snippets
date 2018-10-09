@@ -186,6 +186,10 @@ public:
     flat_map() {}
     flat_map(                 key_container_type&& __k, mapped_container_type&& __v);
     flat_map(sorted_unique_t, key_container_type&& __k, mapped_container_type&& __v);
+//	extra!!
+	flat_map(           const key_container_type& __k, const mapped_container_type& __v)
+		: __c{__k, __v}, __compare{} {}
+
 
     template <class _Container>
     explicit flat_map(const _Container& __cont)
@@ -384,7 +388,7 @@ public:
             return { __it, __c.values.begin() + _VSTD::distance(__c.keys.begin(), __it) };
     }
 
-    const_iterator __make_iterator(typename key_container_type::const_iterator __it)
+    const_iterator __make_iterator(typename key_container_type::const_iterator __it) const
     {
         if (__it == __c.keys.end())
             return { __it, __c.values.end() };
@@ -393,55 +397,67 @@ public:
     }
 
     iterator find(const key_type& __v)
-    { return __make_iterator(__c.keys.find(__v)); }
+    {
+    	typename key_container_type::iterator __it = _VSTD::lower_bound(__c.keys.begin(), __c.keys.end(), __v, __compare);
+    	return __make_iterator(__it != __c.keys.end() && !__compare(__v, *__it) ? __it : __c.keys.end());
+    }
 
     const_iterator find(const key_type& __v) const
-    { return __make_iterator(__c.keys.find(__v)); }
+    {
+    	typename key_container_type::const_iterator __it = _VSTD::lower_bound(__c.keys.begin(), __c.keys.end(), __v, __compare);
+    	return __make_iterator(__it != __c.keys.end() && !__compare(__v, *__it) ? __it : __c.keys.end());
+    }
 
     template <class _K2>
     typename _VSTD::enable_if<_VSTD::__is_transparent<_Compare, _K2>::value,iterator>::type
     find(const _K2& __v)
-    { return __make_iterator(__c.keys.find(__v)); }
+    {
+    	typename key_container_type::iterator __it = _VSTD::lower_bound(__c.keys.begin(), __c.keys.end(), __v, __compare);
+    	return __make_iterator(__it != __c.keys.end() && !__compare(__v, *__it) ? __it : __c.keys.end());
+    }
     
     template <class _K2>
     typename _VSTD::enable_if<_VSTD::__is_transparent<_Compare, _K2>::value,const_iterator>::type
     find(const _K2& __v) const
-    { return __make_iterator(__c.keys.find(__v)); }
+    {
+    	typename key_container_type::const_iterator __it = _VSTD::lower_bound(__c.keys.begin(), __c.keys.end(), __v, __compare);
+    	return __make_iterator(__it != __c.keys.end() && !__compare(__v, *__it) ? __it : __c.keys.end());
+    }
 
     size_type                    count(const key_type& __v) const { return contains(__v) ? 1 : 0; }
     template <class K> size_type count(const K& __v)        const { return contains(__v) ? 1 : 0; }
 
     iterator lower_bound(const key_type& __v)
-    { return __make_iterator(__c.keys.lower_bound(__v)); }
+    { return __make_iterator(_VSTD::lower_bound(__c.keys.begin(), __c.keys.end(), __v, __compare)); }
     
     const_iterator lower_bound(const key_type& __v) const
-    { return __make_iterator(__c.keys.lower_bound(__v)); }
+    { return __make_iterator(_VSTD::lower_bound(__c.keys.begin(), __c.keys.end(), __v, __compare)); }
     
     template <class _K2>
     typename _VSTD::enable_if<_VSTD::__is_transparent<_Compare, _K2>::value, iterator>::type
     lower_bound(const _K2& __v)
-    { return __make_iterator(__c.keys.lower_bound(__v)); }
+    { return __make_iterator(_VSTD::lower_bound(__c.keys.begin(), __c.keys.end(), __v, __compare)); }
     
     template <class _K2>
     typename _VSTD::enable_if<_VSTD::__is_transparent<_Compare, _K2>::value, const_iterator>::type
     lower_bound(const _K2& __v) const
-    { return __make_iterator(__c.keys.lower_bound(__v)); }
+    { return __make_iterator(_VSTD::lower_bound(__c.keys.begin(), __c.keys.end(), __v, __compare)); }
 
     iterator upper_bound(const key_type& __v)
-    { return __make_iterator(__c.keys.upper_bound(__v)); }
+    { return __make_iterator(_VSTD::upper_bound(__c.keys.begin(), __c.keys.end(), __v, __compare)); }
     
     const_iterator upper_bound(const key_type& __v) const
-    { return __make_iterator(__c.keys.upper_bound(__v)); }
+    { return __make_iterator(_VSTD::upper_bound(__c.keys.begin(), __c.keys.end(), __v, __compare)); }
 
     template <class _K2>
     typename _VSTD::enable_if<_VSTD::__is_transparent<_Compare, _K2>::value, iterator>::type
     upper_bound(const _K2& __v)
-    { return __make_iterator(__c.keys.upper_bound(__v)); }
+    { return __make_iterator(_VSTD::upper_bound(__c.keys.begin(), __c.keys.end(), __v, __compare)); }
 
     template <class _K2>
     typename _VSTD::enable_if<_VSTD::__is_transparent<_Compare, _K2>::value, const_iterator>::type
     upper_bound(const _K2& __v) const
-    { return __make_iterator(__c.keys.upper_bound(__v)); }
+    { return __make_iterator(_VSTD::upper_bound(__c.keys.begin(), __c.keys.end(), __v, __compare)); }
 
     _VSTD::pair<      iterator,       iterator> equal_range(const key_type& __v)
     { return _VSTD::make_pair(lower_bound(__v), upper_bound(__v)); }
@@ -449,10 +465,12 @@ public:
     _VSTD::pair<const_iterator, const_iterator> equal_range(const key_type& __v) const
     { return _VSTD::make_pair(lower_bound(__v), upper_bound(__v)); }
 
-    template <class K> _VSTD::pair<      iterator,       iterator> equal_range(const K& __v)
+    template <class _K2>
+    _VSTD::pair<      iterator,       iterator> equal_range(const _K2& __v)
     { return _VSTD::make_pair(lower_bound(__v), upper_bound(__v)); }
 
-    template <class K> _VSTD::pair<const_iterator, const_iterator> equal_range(const K& __v) const
+    template <class _K2>
+    _VSTD::pair<const_iterator, const_iterator> equal_range(const _K2& __v) const
     { return _VSTD::make_pair(lower_bound(__v), upper_bound(__v)); }
 
 private:
@@ -463,13 +481,36 @@ private:
 } // namespace some_std
 
 #include <vector>
+#include <deque>
 #include <string>
 #include <cassert>
+#include <iostream>
 
 int main () {
+    {
     some_std::flat_map<int, std::string> fm;
     assert(fm.size() == 0);
     assert(fm.begin() == fm.end());
 //  assert(std::distance(fm.begin(), fm.end()) == 0);
 	for (const auto &p : fm) {}  // can we enumerate?
+	}
+	{
+		std::vector<int> v = {1, 2, 3, 4, 6};
+		std::deque<std::string> d = { "one", "two", "three", "four", "six" };
+    	some_std::flat_map<int, std::string, std::less<int>, std::vector<int>, std::deque<std::string>> fm{v, d};
+	    assert(fm.size() == 5);
+		for (const auto &p : fm) { std::cout << "  " << p.first << ": " << p.second << std::endl; }  // can we enumerate?
+    	
+		std::cout << "fm[3] = " << (*fm.find(3)).second << std::endl;
+		assert(fm.find(0) == fm.end());
+		assert(fm.find(2) != fm.end());
+		assert(fm.find(5) == fm.end());
+		assert(fm.find(9) == fm.end());
+		assert(fm.find(6) == fm.lower_bound(5));
+		assert(fm.find(6) == fm.upper_bound(5));
+		assert( fm.contains(3));
+		assert(!fm.contains(5));
+// 		assert( fm.contains(3.0));
+// 		assert(!fm.contains(3.5));
+	}
 }
