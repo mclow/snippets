@@ -2,6 +2,7 @@
 
 #include <initializer_list>
 #include <functional>
+#include <algorithm>
 #include <iterator>
 
 /*
@@ -11,7 +12,7 @@ template<class Key, class T, class Compare = less<Key>,
          class KeyContainer = vector<Key>, class MappedContainer = vector<T>>
 class flat_map;
 
-template<class Key, class T, class Compare,class KeyContainer, class MappedContainer>
+template<class Key, class T, class Compare, class KeyContainer, class MappedContainer>
 bool operator==(const flat_map<Key, T, Compare, KeyContainer, MappedContainer>& x,
                 const flat_map<Key, T, Compare, KeyContainer, MappedContainer>& y);
 
@@ -43,10 +44,56 @@ void swap(flat_map<Key, T, Compare, KeyContainer, MappedContainer>& x,
 struct sorted_unique_t { explicit sorted_unique_t() = default; };
 inline constexpr sorted_unique_t sorted_unique {};
 
+// 26.6.9, class template flat_multimap
+template<class Key, class T, class Compare = less<Key>,
+         class KeyContainer = vector<Key>, class MappedContainer = vector<T>>
+class flat_multimap;
+
+template<class Key, class T, class Compare, class KeyContainer, class MappedContainer>
+bool operator==(const flat_multimap<Key, T, Compare, KeyContainer, MappedContainer>& x,
+                const flat_multimap<Key, T, Compare, KeyContainer, MappedContainer>& y);
+
+template<class Key, class T, class Compare, class KeyContainer, class MappedContainer>
+bool operator!=(const flat_multimap<Key, T, Compare, KeyContainer, MappedContainer>& x,
+                const flat_multimap<Key, T, Compare, KeyContainer, MappedContainer>& y);
+
+template<class Key, class T, class Compare, class KeyContainer, class MappedContainer>
+bool operator< (const flat_multimap<Key, T, Compare, KeyContainer, MappedContainer>& x,
+                const flat_multimap<Key, T, Compare, KeyContainer, MappedContainer>& y);
+
+template<class Key, class T, class Compare, class KeyContainer, class MappedContainer>
+bool operator> (const flat_multimap<Key, T, Compare, KeyContainer, MappedContainer>& x,
+                const flat_multimap<Key, T, Compare, KeyContainer, MappedContainer>& y);
+
+template<class Key, class T, class Compare, class KeyContainer, class MappedContainer>
+bool operator<=(const flat_multimap<Key, T, Compare, KeyContainer, MappedContainer>& x,
+                const flat_multimap<Key, T, Compare, KeyContainer, MappedContainer>& y);
+
+template<class Key, class T, class Compare,class KeyContainer, class MappedContainer>
+bool operator>=(const flat_multimap<Key, T, Compare, KeyContainer, MappedContainer>& x,
+                const flat_multimap<Key, T, Compare, KeyContainer, MappedContainer>& y);
+
+template<class Key, class T, class Compare, class KeyContainer, class MappedContainer>
+void swap(flat_multimap<Key, T, Compare, KeyContainer, MappedContainer>& x,
+          flat_multimap<Key, T, Compare, KeyContainer, MappedContainer>& y)
+     noexcept(noexcept(x.swap(y)));
+
+struct sorted_equivalent_t { explicit sorted_equivalent_t() = default; };
+inline constexpr sorted_equivalent_t sorted_equivalent {};
 
 */
 
 namespace some_std {
+
+template <class _Key, class _Tp, class _Compare = _VSTD::less<_Key>,
+          class _KeyContainer    = _VSTD::vector<_Key>, 
+          class _MappedContainer = _VSTD::vector<_Tp> >
+class _LIBCPP_TEMPLATE_VIS flat_map;
+
+template <class _Key, class _Tp, class _Compare = _VSTD::less<_Key>,
+          class _KeyContainer    = _VSTD::vector<_Key>, 
+          class _MappedContainer = _VSTD::vector<_Tp> >
+class _LIBCPP_TEMPLATE_VIS flat_multimap;
 
 
 struct sorted_equivalent_t { explicit sorted_equivalent_t() = default; };
@@ -55,31 +102,80 @@ inline constexpr sorted_equivalent_t sorted_equivalent {};
 struct sorted_unique_t { explicit sorted_unique_t() = default; };
 inline constexpr sorted_unique_t sorted_unique {};
 
+template <class _KIterator, class _VIterator>
+class _LIBCPP_TEMPLATE_VIS __flat_map_iterator {
+    
+public:
+    using _KeyType              = typename _VSTD::iterator_traits<_KIterator>::value_type;
+    using _ValueType            = typename _VSTD::iterator_traits<_VIterator>::value_type;
+    using difference_type       = typename _KIterator::difference_type;
+    using reference             = _VSTD::pair<const _KeyType&, _ValueType&>;
+    using const_reference       = _VSTD::pair<const _KeyType&, const _ValueType&>;
+//      using pointer               = reference *;
+    using iterator_category     = _VSTD::random_access_iterator_tag;
 
-template <class _Key, class _Tp, class _Compare = _VSTD::less<_Key>,
-          class _KeyContainer    = _VSTD::vector<_Key>, 
-          class _MappedContainer = _VSTD::vector<_Tp> >
+    __flat_map_iterator() = default;
+    __flat_map_iterator(const __flat_map_iterator &) = default;
+    __flat_map_iterator &operator=(const __flat_map_iterator &) = default;
+    ~__flat_map_iterator() = default;
+
+    __flat_map_iterator(_KIterator __k, _VIterator __v)
+        : __keyIter(__k), __valueIterator(__v) {}
+    
+    reference operator*() const { return {*__keyIter, *__valueIterator}; }
+//  pointer   operator->() const;
+    reference operator[](difference_type __n) const { return {__keyIter[__n], __valueIterator[__n]}; }
+
+    __flat_map_iterator& operator++()                          { ++__keyIter; ++__valueIterator; return *this; }
+    __flat_map_iterator& operator--()                          { --__keyIter; --__valueIterator; return *this; }
+    __flat_map_iterator  operator++(int)                       { __flat_map_iterator __tmp(*this); ++(*this); return __tmp; }
+    __flat_map_iterator  operator--(int)                       { __flat_map_iterator __tmp(*this); --(*this); return __tmp; }
+    __flat_map_iterator  operator+ (difference_type __n) const { __flat_map_iterator __tmp(*this); __tmp += __n; return __tmp; }
+    __flat_map_iterator  operator- (difference_type __n) const { __flat_map_iterator __tmp(*this); __tmp -= __n; return __tmp; }
+    __flat_map_iterator& operator+=(difference_type __n)       { __keyIter += __n; __valueIterator += __n; return *this; }
+    __flat_map_iterator  operator-=(difference_type __n)       { __keyIter -= __n; __valueIterator -= __n; return *this; }
+
+    bool __equal(const __flat_map_iterator &rhs) const
+    { return __keyIter == rhs.__keyIter && __valueIterator == rhs.__valueIterator; }
+
+private:
+    _KIterator __keyIter;
+    _VIterator __valueIterator;
+};
+
+template<class _KIterator, class _VIterator>
+bool operator==(const __flat_map_iterator<_KIterator, _VIterator>& x,
+                const __flat_map_iterator<_KIterator, _VIterator>& y)
+{ return x.__equal(y); }
+
+template<class _KIterator, class _VIterator>
+bool operator!=(const __flat_map_iterator<_KIterator, _VIterator>& x,
+                const __flat_map_iterator<_KIterator, _VIterator>& y)
+{ return !(x == y); }
+
+
+template <class _Key, class _Tp, class _Compare,
+          class _KeyContainer, class _MappedContainer>
 class _LIBCPP_TEMPLATE_VIS flat_map {
 public:
-public:
     // types:
-    using key_type              = _Key;
-    using mapped_type           = _Tp;
-    using value_type            = _VSTD::pair<const _Key, _Tp>;
-    using key_compare           = _Compare;
-    using key_container_type    = _KeyContainer;
-    using mapped_container_type = _MappedContainer;
-    using key_allocator_type    = typename key_container_type::allocator_type;
-    using mapped_allocator_type = typename mapped_container_type::allocator_type;
-    using reference             = _VSTD::pair<const _Key&, _Tp&>;
-    using const_reference       = _VSTD::pair<const _Key&, const _Tp&>;
-    using size_type             = size_t;
-    using difference_type       = ptrdiff_t;
+    using key_type               = _Key;
+    using mapped_type            = _Tp;
+    using value_type             = _VSTD::pair<const _Key, _Tp>;
+    using key_compare            = _Compare;
+    using key_container_type     = _KeyContainer;
+    using mapped_container_type  = _MappedContainer;
+    using key_allocator_type     = typename key_container_type::allocator_type;
+    using mapped_allocator_type  = typename mapped_container_type::allocator_type;
+    using reference              = _VSTD::pair<const _Key&, _Tp&>;
+    using const_reference        = _VSTD::pair<const _Key&, const _Tp&>;
+    using size_type              = size_t;
+    using difference_type        = ptrdiff_t;
 
-//  using iterator = implementation-defined ; // see 26.2
-//  using const_iterator = implementation-defined ; // see 26.2
-//  using reverse_iterator = std::reverse_iterator<iterator>;
-//  using const_reverse_iterator = std::reverse_iterator<const_iterator>;
+    using iterator               = __flat_map_iterator<typename _KeyContainer::iterator,       typename _MappedContainer::iterator>;
+    using const_iterator         = __flat_map_iterator<typename _KeyContainer::const_iterator, typename _MappedContainer::const_iterator>;
+    using reverse_iterator       = std::reverse_iterator<iterator>;
+    using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
     struct containers {
         _KeyContainer    keys;
@@ -87,7 +183,7 @@ public:
     };
     
     // 26.6.8.2, construct/copy/destroy
-    flat_map();
+    flat_map() {}
     flat_map(                 key_container_type&& __k, mapped_container_type&& __v);
     flat_map(sorted_unique_t, key_container_type&& __k, mapped_container_type&& __v);
 
@@ -163,33 +259,36 @@ public:
 //  flat_map& operator=(const flat_map &); // Do we need this?
 
     // iterators
-    iterator               begin()         noexcept;
-    const_iterator         begin()   const noexcept;
-    iterator               end()           noexcept;
-    const_iterator         end()     const noexcept;
-    reverse_iterator       rbegin()        noexcept;
-    const_reverse_iterator rbegin()  const noexcept;
-    reverse_iterator       rend()          noexcept;
-    const_reverse_iterator rend()    const noexcept;
-    const_iterator         cbegin()  const noexcept;
-    const_iterator         cend()    const noexcept;
-    const_reverse_iterator crbegin() const noexcept;
-    const_reverse_iterator crend()   const noexcept;
+    iterator               begin()         noexcept { return {__c.keys.begin(),   __c.values.begin()}; }
+    const_iterator         begin()   const noexcept { return {__c.keys.begin(),   __c.values.begin()}; }
+    iterator               end()           noexcept { return {__c.keys.end(),     __c.values.end()}; }
+    const_iterator         end()     const noexcept { return {__c.keys.end(),     __c.values.end()}; }
+
+    reverse_iterator       rbegin()        noexcept { return       reverse_iterator({__c.keys.end(),   __c.values.end()}); }
+    const_reverse_iterator rbegin()  const noexcept { return const_reverse_iterator({__c.keys.end(),   __c.values.end()}); }
+    reverse_iterator       rend()          noexcept { return       reverse_iterator({__c.keys.begin(), __c.values.begin()}); }
+    const_reverse_iterator rend()    const noexcept { return const_reverse_iterator({__c.keys.begin(), __c.values.begin()}); }
+
+    const_iterator         cbegin()  const noexcept { return begin(); }
+    const_iterator         cend()    const noexcept { return end(); }
+    const_reverse_iterator crbegin() const noexcept { return rbegin(); }
+    const_reverse_iterator crend()   const noexcept { return rend(); }
 
     // capacity
     [[nodiscard]] bool empty() const noexcept { return size() == 0; }
-    size_type  size()    const noexcept { return __c.keys.size(); }
-    size_type max_size() const noexcept;
+    size_type           size() const noexcept { return __c.keys.size(); }
+    size_type       max_size() const noexcept { return _VSTD::max(__c.keys.max_size(), __c.values.max_size()); }
 
     // 26.6.8.4, element access
-    mapped_type& operator[](const key_type&  x);
-    mapped_type& operator[](      key_type&& x);
-    mapped_type&       at(const key_type& x);
-    const mapped_type& at(const key_type& x) const;
+    mapped_type& operator[](const key_type&  __k) { return (*find(__k)).second; }
+    mapped_type& operator[](      key_type&& __k);
+    mapped_type&         at(const key_type& x);
+    const mapped_type&   at(const key_type& x) const;
 
     // 26.6.8.5, modifiers
     template <class... Args>
     _VSTD::pair<iterator, bool> emplace(Args&&... args);
+
     template <class... Args>
     iterator emplace_hint(const_iterator position, Args&&... args);
 
@@ -210,8 +309,8 @@ public:
     template <class _InputIterator>
     void insert(sorted_unique_t, _InputIterator __first, _InputIterator __last);
 
-    void insert(                 initializer_list<_VSTD::pair<_Key, _Tp>> __il);
-    void insert(sorted_unique_t, initializer_list<_VSTD::pair<_Key, _Tp>> __il);
+    void insert(                 std::initializer_list<_VSTD::pair<_Key, _Tp>> __il);
+    void insert(sorted_unique_t, std::initializer_list<_VSTD::pair<_Key, _Tp>> __il);
 
     containers extract() &&;
 
@@ -242,54 +341,107 @@ public:
     iterator erase(const_iterator first, const_iterator last);
 
     void swap(flat_map& fm)
-        noexcept(is_nothrow_swappable_v<key_container_type> 
-              && is_nothrow_swappable_v<mapped_container_type>
-              && is_nothrow_swappable_v<key_compare> )
+        noexcept(_VSTD::is_nothrow_swappable_v<key_container_type> 
+              && _VSTD::is_nothrow_swappable_v<mapped_container_type>
+              && _VSTD::is_nothrow_swappable_v<key_compare>)
     {
-    using std::swap;
-    swap(__c.keys,   fm.__c.keys);
-    swap(__c.values, fm.__c.values);
-    swap(__compare,  __compare);
+        using std::swap;
+        swap(__c.keys,   fm.__c.keys);
+        swap(__c.values, fm.__c.values);
+        swap(__compare,  __compare);
     }
 
     void clear() noexcept { __c.keys.clear(); __c.values.clear(); };
 
-    template<class C2>
-    void merge(flat_map<Key, T, C2, KeyContainer, MappedContainer>& source);
-    template<class C2>
-    void merge(flat_map<Key, T, C2, KeyContainer, MappedContainer>&& source);
-    template<class C2>
-    void merge(flat_map<Key, T, C2, KeyContainer, MappedContainer>& source);
-    template<class C2>
-    void merge(flat_map<Key, T, C2, KeyContainer, MappedContainer>&& source);
+//     template<class C2>
+//     void merge(flat_multimap<_Key, _Tp, C2, _KeyContainer, _MappedContainer>& source);
+// 
+//     template<class C2>
+//     void merge(flat_multimap<_Key, _Tp, C2, _KeyContainer, _MappedContainer>&& source);
+// 
+//     template<class C2>
+//     void merge(flat_map<_Key, _Tp, C2, _KeyContainer, _MappedContainer>& source);
+// 
+//     template<class C2>
+//     void merge(flat_map<_Key, _Tp, C2, _KeyContainer, _MappedContainer>&& source);
 
-    // observers
+
+// observers
     key_compare key_comp() const;
-    value_compare value_comp() const;
-    const KeyContainer & keys()      const { return __c.keys; }
-    const MappedContainer & values() const { return __c.values; }
+//    value_compare value_comp() const;
+    const _KeyContainer & keys()      const { return __c.keys; }
+    const _MappedContainer & values() const { return __c.values; }
 
     // map operations
     bool contains(const key_type& __v)             const { return find(__v) != cend(); }
     template <class K> bool contains(const K& __v) const { return find(__v) != cend(); }
 
-          iterator find(const key_type& __v);
-    const_iterator find(const key_type& __v) const;
-    template <class K>       iterator find(const K& __v);
-    template <class K> const_iterator find(const K& __v) const;
+    iterator __make_iterator(typename key_container_type::iterator __it)
+    {
+        if (__it == __c.keys.end())
+            return { __it, __c.values.end() };
+        else
+            return { __it, __c.values.begin() + _VSTD::distance(__c.keys.begin(), __it) };
+    }
+
+    const_iterator __make_iterator(typename key_container_type::const_iterator __it)
+    {
+        if (__it == __c.keys.end())
+            return { __it, __c.values.end() };
+        else
+            return { __it, __c.values.begin() + _VSTD::distance(__c.keys.begin(), __it) };
+    }
+
+    iterator find(const key_type& __v)
+    { return __make_iterator(__c.keys.find(__v)); }
+
+    const_iterator find(const key_type& __v) const
+    { return __make_iterator(__c.keys.find(__v)); }
+
+    template <class _K2>
+    typename _VSTD::enable_if<_VSTD::__is_transparent<_Compare, _K2>::value,iterator>::type
+    find(const _K2& __v)
+    { return __make_iterator(__c.keys.find(__v)); }
+    
+    template <class _K2>
+    typename _VSTD::enable_if<_VSTD::__is_transparent<_Compare, _K2>::value,const_iterator>::type
+    find(const _K2& __v) const
+    { return __make_iterator(__c.keys.find(__v)); }
 
     size_type                    count(const key_type& __v) const { return contains(__v) ? 1 : 0; }
     template <class K> size_type count(const K& __v)        const { return contains(__v) ? 1 : 0; }
 
-          iterator lower_bound(const key_type& __v);
-    const_iterator lower_bound(const key_type& __v) const;
-    template <class K>       iterator lower_bound(const K& __v);
-    template <class K> const_iterator lower_bound(const K& __v) const;
+    iterator lower_bound(const key_type& __v)
+    { return __make_iterator(__c.keys.lower_bound(__v)); }
+    
+    const_iterator lower_bound(const key_type& __v) const
+    { return __make_iterator(__c.keys.lower_bound(__v)); }
+    
+    template <class _K2>
+    typename _VSTD::enable_if<_VSTD::__is_transparent<_Compare, _K2>::value, iterator>::type
+    lower_bound(const _K2& __v)
+    { return __make_iterator(__c.keys.lower_bound(__v)); }
+    
+    template <class _K2>
+    typename _VSTD::enable_if<_VSTD::__is_transparent<_Compare, _K2>::value, const_iterator>::type
+    lower_bound(const _K2& __v) const
+    { return __make_iterator(__c.keys.lower_bound(__v)); }
 
-          iterator upper_bound(const key_type& __v);
-    const_iterator upper_bound(const key_type& __v) const;
-    template <class K>       iterator upper_bound(const K& __v);
-    template <class K> const_iterator upper_bound(const K& __v) const;
+    iterator upper_bound(const key_type& __v)
+    { return __make_iterator(__c.keys.upper_bound(__v)); }
+    
+    const_iterator upper_bound(const key_type& __v) const
+    { return __make_iterator(__c.keys.upper_bound(__v)); }
+
+    template <class _K2>
+    typename _VSTD::enable_if<_VSTD::__is_transparent<_Compare, _K2>::value, iterator>::type
+    upper_bound(const _K2& __v)
+    { return __make_iterator(__c.keys.upper_bound(__v)); }
+
+    template <class _K2>
+    typename _VSTD::enable_if<_VSTD::__is_transparent<_Compare, _K2>::value, const_iterator>::type
+    upper_bound(const _K2& __v) const
+    { return __make_iterator(__c.keys.upper_bound(__v)); }
 
     _VSTD::pair<      iterator,       iterator> equal_range(const key_type& __v)
     { return _VSTD::make_pair(lower_bound(__v), upper_bound(__v)); }
@@ -312,7 +464,12 @@ private:
 
 #include <vector>
 #include <string>
+#include <cassert>
 
 int main () {
-	somestd_::flat_map<int, std::string> fm;
+    some_std::flat_map<int, std::string> fm;
+    assert(fm.size() == 0);
+    assert(fm.begin() == fm.end());
+//  assert(std::distance(fm.begin(), fm.end()) == 0);
+	for (const auto &p : fm) {}  // can we enumerate?
 }
