@@ -283,25 +283,25 @@ public:
     constexpr operator view() const noexcept { return view{data(), size()}; }
 
 //  iterators
-    constexpr iterator               begin()         noexcept;
-    constexpr const_iterator         begin()   const noexcept;
-    constexpr iterator               end()           noexcept;
-    constexpr const_iterator         end()     const noexcept;
-    constexpr reverse_iterator       rbegin()        noexcept;
-    constexpr const_reverse_iterator rbegin()  const noexcept;
-    constexpr reverse_iterator       rend()          noexcept;
-    constexpr const_reverse_iterator rend()    const noexcept;
-    constexpr const_iterator         cbegin()  const noexcept;
-    constexpr const_iterator         cend()    const noexcept;
-    constexpr const_reverse_iterator crbegin() const noexcept;
-    constexpr const_reverse_iterator crend()   const noexcept;
+    constexpr iterator               begin()         noexcept { return data(); }
+    constexpr const_iterator         begin()   const noexcept { return data(); }
+    constexpr iterator               end()           noexcept { return data() + size(); }
+    constexpr const_iterator         end()     const noexcept { return data() + size(); }
+    constexpr reverse_iterator       rbegin()        noexcept { return reverse_iterator(end()); }
+    constexpr const_reverse_iterator rbegin()  const noexcept { return reverse_iterator(end()); }
+    constexpr reverse_iterator       rend()          noexcept { return reverse_iterator(begin()); }
+    constexpr const_reverse_iterator rend()    const noexcept { return reverse_iterator(begin()); }
+    constexpr const_iterator         cbegin()  const noexcept { return begin(); }
+    constexpr const_iterator         cend()    const noexcept { return end(); }
+    constexpr const_reverse_iterator crbegin() const noexcept { return rbegin(); }
+    constexpr const_reverse_iterator crend()   const noexcept { return rend(); }
 
 //  capacity
     constexpr size_type size()     const noexcept;
-    constexpr size_type length()   const noexcept;
+    constexpr size_type length()   const noexcept { return size(); }
     constexpr size_type max_size() const noexcept { return _Sz; }
     constexpr size_type capacity() const noexcept { return _Sz; }
-    constexpr bool      empty()    const noexcept;
+    constexpr bool      empty()    const noexcept { return size() != 0; }
 
 //  element access
     constexpr const_reference operator[](size_type __pos) const noexcept;
@@ -309,10 +309,10 @@ public:
     constexpr const_reference at        (size_type __pos) const noexcept;
     constexpr       reference at        (size_type __pos)       noexcept;
 
-    constexpr const_reference front() const noexcept;
-    constexpr       reference front()       noexcept;
-    constexpr const_reference back()  const noexcept;
-    constexpr       reference back()        noexcept;
+    constexpr const_reference front() const noexcept { return __data[0]; }
+    constexpr       reference front()       noexcept { return __data[0]; }
+    constexpr const_reference back()  const noexcept { return __data[size() - 1]; }
+    constexpr       reference back()        noexcept { return __data[size() - 1]; }
 
 //  modifications
     constexpr basic_fixed_string& replace(size_t pos, view str);
@@ -320,7 +320,7 @@ public:
 
 //  string operations
     constexpr const _CharT* c_str() const noexcept;
-    constexpr const _CharT* data() const noexcept;
+    constexpr const _CharT*  data() const noexcept { return __data; }
 
     constexpr size_type find(view str, size_type __pos = 0) const noexcept;
     constexpr size_type find(const _CharT *__s, size_type __pos, size_type __n) const;
@@ -366,8 +366,13 @@ private:
     _CharT __data[_Sz+1];
 };
 
+//	clang complains here that 'non-type template argument is not a constant expression'
+    constexpr auto operator ""_fs(const char *__str, size_t __len) -> basic_fixed_string<char, __len>
+    { return basic_fixed_string<char, __len>::__make_fixed_string1(__str); }
+
 } //namespace somestd
 
 int main()
 {
+	somestd::basic_fixed_string<char, 16> fs{"abcdefghijklmnop"};
 }
