@@ -134,6 +134,7 @@ constexpr typename std::enable_if<
     int>::type
 countl_zero(_Tp __t) noexcept
 {
+    static_assert(sizeof(_Tp) % sizeof(unsigned long long) == 0, "");
     if (__t == 0)
         return std::numeric_limits<_Tp>::digits;
     
@@ -208,6 +209,7 @@ constexpr typename std::enable_if<
     int>::type
 countr_zero(_Tp __t) noexcept
 {
+    static_assert(sizeof(_Tp) % sizeof(unsigned long long) == 0, "");
     if (__t == 0)
         return std::numeric_limits<_Tp>::digits;
     
