@@ -3,6 +3,7 @@
 #include <iterator>
 #include <cassert>
 
+#include <iostream>
 
 class Base64Decoder {
 public:
@@ -15,13 +16,23 @@ public:
 		assert(num_chars < chars.size());
 		if (eq_count > 0 && num_chars + eq_count != 4)
 			throw std::runtime_error("Base64 decode: wrong # of '='");
+		if (num_chars == 1)
+			throw std::runtime_error("Base64 decode: wrong # characters");
 
-		if (num_chars > 0)
+	//	Output the last few chars
+		uint32_t bits = 0;
+		for (size_t sz = 0; sz < num_chars; ++sz)
+			bits = bits << 6 | B64_Index(chars[sz]);
+			
+		if (num_chars == 2)
+			*out++ = static_cast<char>(bits >> 4);
+		else if (num_chars == 3)
 		{
-		//	output the last few chars
-			num_chars = 0;
+			*out++ = static_cast<char>(bits >> 10);
+			*out++ = static_cast<char>(bits >>  2);
 		}
 
+		num_chars = 0;
 		finish_called = true;
 		return out;
 	}
@@ -47,7 +58,15 @@ public:
 			chars[num_chars++] = ch;
 			if (num_chars == chars.size())
 			{
-			//	output three chars
+				uint32_t bits = 0;
+				bits =             B64_Index(chars[0]);
+				bits = bits << 6 | B64_Index(chars[1]);
+				bits = bits << 6 | B64_Index(chars[2]);
+				bits = bits << 6 | B64_Index(chars[3]);
+
+				*out++ = static_cast<char>(bits >> 16);
+				*out++ = static_cast<char>(bits >>  8);
+				*out++ = static_cast<char>(bits      );
 				num_chars = 0;
 			}
 		}
@@ -57,7 +76,7 @@ public:
 	template <typename InputIterator, typename OutputIterator>
 	OutputIterator decode_and_finish (InputIterator first, InputIterator last, OutputIterator out)
 	{
-		return finish(decode (first, last, out));
+		return finish(decode(first, last, out));
 	}
 
 	// Upper bound; may be one too big in some cases
@@ -70,14 +89,15 @@ public:
 		    || c == 'r' || c == '\t' || c == '\v';
 	}
 
-	static bool is_validB64(char c) noexcept
+	static bool is_validB64(char c) noexcept { return B64_Index(c) < 64; }
+	static size_t B64_Index(char c) noexcept
 	{ 
-		return (c >= 'A' && c <= 'Z') // 26
-		    || (c >= 'a' && c <= 'z') // 26
-		    || (c >= '0' && c <= '9') // 10
-		    || (c == '+')
-		    || (c == '/')
-			;
+		if (c >= 'A' && c <= 'Z') return 00 + c - 'A'; //  0 .. 25
+		if (c >= 'a' && c <= 'z') return 26 + c - 'a'; // 26 .. 51
+		if (c >= '0' && c <= '9') return 52 + c - '0'; // 52 .. 61
+		if (c == '+') return 62;
+		if (c == '/') return 63;
+		return 64;
 	}
 
 private:	// later, we can pack this down
@@ -178,7 +198,6 @@ private:	// later, we can pack this down
 	std::array<unsigned char, 3> chars;
 	};
 
-#include <iostream>
 #include <iomanip>
 #include <string_view>
 
@@ -192,8 +211,15 @@ int main () {
 
 	const char *s1 = "any carnal pleasure.";
 	for (size_t sz = 16; sz < 21; sz++) {
-		std::cout << std::setw(30) << std::string_view{s1, sz} << " --> ";
-		Base64Encoder{}.encode_and_finish(s1, s1 + sz, std::ostream_iterator<char>(std::cout, ""));	
+	//	std::cout << std::setw(30) << std::string_view{s1, sz} << " --> ";
+		std::string se, sd;
+		std::string_view sv{s1, sz};
+		Base64Encoder{}.encode_and_finish(sv.begin(), sv.end(), std::back_inserter(se));
+		Base64Decoder{}.decode_and_finish(se.begin(), se.end(), std::back_inserter(sd));
+		std::cout << "\t'" << sv << "'" << std::endl;
+		std::cout << "\t'" << se << "'" << std::endl;
+		if (sd != sv)
+			std::cout << "\t'" << sd << "'  <<-- Mismatch (" << sv.size() << " vs. " << sd.size() << ')' << std::endl;
 		std::cout << std::endl;
 		}
 }
