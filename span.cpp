@@ -168,6 +168,9 @@ struct __is_std_array_impl<std::array<_Tp, _N>> : public std::true_type {};
 template <class _Tp>
 struct __is_std_array : public __is_std_array_impl<std::remove_cv_t<_Tp>> {};
 
+template <class _Tp, class _ElementType>
+struct __is_span_compatible_ptr : 
+  public std::bool_constant<std::is_convertible_v<_Tp(*)[], _ElementType(*)[]>> {};
 
 template <class _Tp, class _ElementType, class = void>
 struct __is_span_compatible_container : public std::false_type {};
@@ -184,10 +187,11 @@ struct __is_span_compatible_container<_Tp, _ElementType,
             decltype(std::size(std::declval<_Tp>())),
         // remove_pointer_t<decltype(data(cont))>(*)[] is convertible to ElementType(*)[]
             typename std::enable_if<
-                std::is_convertible_v<
-                    std::remove_pointer_t<decltype(std::data(std::declval<_Tp &>()))>(*)[],
-                                                                         _ElementType(*)[]>,
-                std::nullptr_t>::type
+                __is_span_compatible_ptr<
+                    std::remove_pointer_t<decltype(std::data(std::declval<_Tp &>()))>,
+                    _ElementType>
+                ::value,
+            	std::nullptr_t>::type
         >>
     : public std::true_type {};
 
@@ -222,10 +226,7 @@ public:
     constexpr span(pointer __f, pointer __l) : __data{__f}
         { assert(_Extent == std::distance(__f, __l)); }
 
-//  TODO This should not be a template - make _N and _Extent the same
-    template <size_t _N>
-        constexpr span(element_type (&__arr)[_N]) : __data{__arr}
-        { static_assert(_Extent == _N); }
+    constexpr span(element_type (&__arr)[_Extent]) : __data{__arr} {}
 
 //  TODO This should not be a template - make _N and _Extent the same
     template <size_t _N>
@@ -763,21 +764,21 @@ int main ()
     static_assert(!__is_span_compatible_container<std::list<int>, int>::value);
     }
 
-    {
-        std::vector<int> v1;
-        const std::vector<int> v2;
-        span<int> s1 = v1;					(void) s1.size();
-        span<const int> sc1 = v1;			(void) sc1.size();
-        span<int, 0> s1f = v1;				(void) s1f.size();
-        span<const int, 0> sc1f = v1;		(void) sc1f.size();
-        span sd1 = v1;						(void) sd1.size();
-
-//      span<int> s2 = v2; // fails
-//      span<int, 0> s2f = v2; // fails
-        span<const int> s2 = v2;			(void) s2. size();
-        span<const int, 0> s2f = v2;		(void) s2f.size();
-        span s2d = v2;						(void) s2d.size();
-    }
+//     {
+//         std::vector<int> v1;
+//         const std::vector<int> v2;
+//         span<int> s1 = v1;					(void) s1.size();
+//         span<const int> sc1 = v1;			(void) sc1.size();
+//         span<int, 0> s1f = v1;				(void) s1f.size();
+//         span<const int, 0> sc1f = v1;		(void) sc1f.size();
+//         span sd1 = v1;						(void) sd1.size();
+// 
+// //      span<int> s2 = v2; // fails
+// //      span<int, 0> s2f = v2; // fails
+//         span<const int> s2 = v2;			(void) s2. size();
+//         span<const int, 0> s2f = v2;		(void) s2f.size();
+//         span s2d = v2;						(void) s2d.size();
+//     }
         
     {
         class A; // incomplete
