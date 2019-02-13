@@ -1,10 +1,48 @@
-// base64 encoding and decoding - method cribbed from https://en.wikipedia.org/wiki/Base64
+// base64 encoding and decoding - info from https://en.wikipedia.org/wiki/Base64
+// Copyright 2019 Marshall Clow
+// Licensed under the Boost Software License
+//
+//
+//	General idea: have an object that manages the conversion
+//		It keeps a bit of state, for when the input need not be an even multiple of 3
+//		(on encoding) or 4 (on decoding). This allows you to process in chunks
+//		(say streaming) instead of requiring the entire input to be available at once.
+//
+//	There are two calls: encode(decode) and finish. The first one processes as much as
+//		possible on each call. The 'finish' method is used to signal that there is no
+//		more input, and any waiting data should be written.
+//
+//	Examples:
+//	I just want to decode a buffer. No fancy stuff
+//		Base64Decoder{}.decode_and_finish(ptr, ptr + size, dest);
+//
+//	I'm getting chunks from somewhere
+//		Base64Decoder b64;
+// 		while (!done) {
+// 			dest = b64.decode(ptr, ptr + size, dest);
+// 			.. get more data ..
+// 		}
+// 		dest = b64.finish(dest);
+//
+//	I want to convert a string into another string
+// 	string source = ....;
+// 	string dest;
+// 	dest.reserve(Base64Decoder::decoded_size(source.size())); // not strictly necessary
+// 	Base64Decoder{}.decode_and_finish(source.begin(), source.end(),
+// 			back_insert_iterator<char>(dest));
+// 	
+//
+//	Problems
+//		How to report/recover from errors
+//			At the present time, I throw exceptions
+//		How do ensure that people call "finish"?
+//			I can assert/throw in the destructor, but that falls afoul of the other error handling.
+//	
+//	This technique can be used for uuencode/decode as well https://en.wikipedia.org/wiki/Uuencoding
 
 #include <iterator>
 #include <cassert>
 #include <stdexcept>
-
-// #include <iostream>
 
 class Base64Decoder {
 public:
@@ -101,27 +139,6 @@ private:	// later, we can pack this down
 	size_t num_chars;
 	uint32_t chars;
 	};
-
-
-// I just want to decode a buffer. No fancy stuff
-//		Base64Decoder{}.decode_and_finish(ptr, ptr + size, dest);
-
-// I'm getting chunks from somewhere
-//		Base64Decoder b64;
-// 		while (!done) {
-// 			dest = b64.decode(ptr, ptr + size, dest);
-// 			.. get more data ..
-// 		}
-// 		dest = b64.finish(dest);
-
-// I want to convert a string into another string
-// 	string source = ....;
-// 	string dest;
-// 	dest.reserve(Base64Decoder::decoded_size(source.size())); // not strictly necessary
-// 	Base64Decoder{}.decode_and_finish(source.begin(), source.end(),
-// 			back_insert_iterator<char>(dest));
-// 	
-
 
 
 class Base64Encoder {
