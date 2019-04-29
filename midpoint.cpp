@@ -36,13 +36,19 @@ midpoint(_TPtr __a, _TPtr __b) noexcept
     return __a + midpoint<ptrdiff_t>(0, __b - __a);
 }
 
+template <typename _Tp>
+int __sign(_Tp __val) {
+    return (_Tp(0) < __val) - (__val < _Tp(0));
+}
+
 
 template <class _Fp>
 _LIBCPP_INLINE_VISIBILITY constexpr
 enable_if_t<is_floating_point_v<_Fp>, _Fp>
 midpoint(_Fp __a, _Fp __b) noexcept
 {
-    return isnormal(__a) && isnormal(__b)
+    return isnormal(__a) && isnormal(__b) 
+       && ((__sign(__a) != __sign(__b)) || ((numeric_limits<_Fp>::max() - abs(__a)) < abs(__b)))
              ?  __a / 2 + __b / 2
              : (__a + __b) / 2;
 }
@@ -53,13 +59,40 @@ midpoint(_Fp __a, _Fp __b) noexcept
 _LIBCPP_END_NAMESPACE_STD
 
 
+
+
 #include <iostream>
 #include <cassert>
 #include <limits>
 #include <cstdint>
 #include <sstream>
 
-#include <boost/math/special_functions/next.hpp>  // for float_distance.
+// #include <boost/math/special_functions/next.hpp>  // for float_distance.
+
+//	Totally arbitrary picks for precision
+template <typename T>
+constexpr T fp_error_val();
+
+template <>
+constexpr float fp_error_val<float>() { return 1.0e-5f; }
+
+template <>
+constexpr double fp_error_val<double>() { return 1.0e-10; }
+
+template <>
+constexpr long double fp_error_val<long double>() { return 1.0e-15l; }
+
+template <typename T>
+constexpr T fp_error_pct();
+
+template <>
+constexpr float fp_error_pct<float>() { return 1.0e-4f; }
+
+template <>
+constexpr double fp_error_pct<double>() { return 1.0e-12; }
+
+template <>
+constexpr long double fp_error_pct<long double>() { return 1.0e-13l; }
 
 
 template<typename Integer>
@@ -146,64 +179,147 @@ void pointer_test()
 	assert(std::midpoint(array +   11, array) == array + 6);
 }
 
+// See https://www.boost.org/doc/libs/1_70_0/libs/test/doc/html/boost_test/testing_tools/extended_comparison/floating_point/floating_points_comparison_theory.html
+template<typename T>
+bool closeEnough(T val, T expected, T eps)
+{
+	constexpr T zero = T(0);
+	assert(eps >= zero);
+
+//	Handle the zero cases
+	if (eps      == zero) return val == expected;
+	if (val      == zero) return std::abs(expected) <= eps;
+	if (expected == zero) return std::abs(val)      <= eps;
+
+	return std::abs(val - expected) < eps
+	    && std::abs(val - expected)/std::abs(val) < eps;
+}
+
+template<typename T>
+bool closePercent(T val, T expected, T percent)
+{
+	constexpr T zero = T(0);
+	assert(percent >= zero);
+
+//	Handle the zero cases
+	if (percent == zero) return val == expected;
+	T eps = (percent / 100.0) * std::max(std::abs(val), std::abs(expected));
+
+	return closeEnough(val, expected, eps);
+}
+
+// 
+// template <typename T>
+// bool closeEnough(T val, T expected, int p = std::numeric_limits<T>::max_digits10 - 3)
+// {
+// 	if (val == expected) return true;
+// 	T diff = val - expected;
+// 	std::cout << "Distance :" << (int) boost::math::float_distance(val, expected) << std::endl;
+// // 	T rel = ( diff / val ) * std::pow(T(10), std::numeric_limits<T>::max_digits10);
+// // 	std::cout << "diff is :" << rel << " ppm" << std::endl;
+// 	std::cout << std::hexfloat << val << " vs " << expected << std::endl;
+// 	
+// 	{
+// 		T temp = val;
+// 		size_t c;
+// 		for (c = 1; temp < expected; ++c)
+// 			temp = std::nexttoward(temp, expected);
+// 		std::cout << "Took " << c << " steps to match\n";
+// 		}
+//     {
+//     std::ostringstream o;
+//     o.precision(p);
+//     scientific(o);
+//     o << val;
+//     std::string a = o.str();
+//     std::cout << "First string: " << a;
+//     o.str("");
+//     o << expected;
+//     std::cout << "    second string: " << o.str() << std::endl;
+//     return true; // a == o.str();
+// 	}
+// 	
+// 	return false;
+// }
 
 template <typename T>
-bool closeEnough(T val, T expected, int p = std::numeric_limits<T>::max_digits10 - 3)
+void printMe(T val, int p = std::numeric_limits<T>::max_digits10)
 {
-	if (val == expected) return true;
-	T diff = val - expected;
-	std::cout << "Distance :" << (int) boost::math::float_distance(val, expected) << std::endl;
-// 	T rel = ( diff / val ) * std::pow(T(10), std::numeric_limits<T>::max_digits10);
-// 	std::cout << "diff is :" << rel << " ppm" << std::endl;
-	std::cout << std::hexfloat << val << " vs " << expected << std::endl;
-	
-	{
-		T temp = val;
-		size_t c;
-		for (c = 1; temp < expected; ++c)
-			temp = std::nexttoward(temp, expected);
-		std::cout << "Took " << c << " steps to match\n";
-		}
-    {
     std::ostringstream o;
     o.precision(p);
     scientific(o);
     o << val;
-    std::string a = o.str();
-    std::cout << "First string: " << a;
-    o.str("");
-    o << expected;
-    std::cout << "    second string: " << o.str() << std::endl;
-    return true; // a == o.str();
-	}
-	
-	return false;
+    std::cout << o.str() << std::endl;
 }
 
 template <typename T>
 void fp_test()
 {
-	std::cout << "Digits: " << std::numeric_limits<T>::max_digits10 << std::endl;
-	std::cout << "Eps:  "   << std::numeric_limits<T>::epsilon() << std::endl;
+	static_assert(std::is_same_v<T, decltype(std::midpoint(T(), T()))>, "");
+	static_assert(                  noexcept(std::midpoint(T(), T())), "");
+
+// 	std::cout << "Digits: " << std::numeric_limits<T>::max_digits10 << std::endl;
+// 	std::cout << "Eps:    " << std::numeric_limits<T>::epsilon() << std::endl;
+// 	constexpr T eps = 10000 * std::numeric_limits<T>::epsilon();
+	constexpr T eps = fp_error_val<T>();
+	constexpr T maxV = std::numeric_limits<T>::max();
+	constexpr T minV = std::numeric_limits<T>::min();
+	
 //	Things that can be compared exactly
-    assert(std::midpoint(T(0), T(0)) == T(0));
-    assert(std::midpoint(T(2), T(4)) == T(3));
-    assert(std::midpoint(T(4), T(2)) == T(3));
-    assert(std::midpoint(T(3), T(4)) == T(3.5));
+    assert((std::midpoint(T(0), T(0)) == T(0)));
+    assert((std::midpoint(T(2), T(4)) == T(3)));
+    assert((std::midpoint(T(4), T(2)) == T(3)));
+    assert((std::midpoint(T(3), T(4)) == T(3.5)));
+	assert((std::midpoint(T(0), T(0.4)) == T(0.2)));
 
 //	Things that can't be compared exactly
-	assert((closeEnough(std::midpoint(T( 1.3), T(11.4)), T( 6.35))));
-	assert((closeEnough(std::midpoint(T(11.33), T(31.45)), T(21.39))));
-	assert((closeEnough(std::midpoint(T(-1.3), T(11.4)), T( 5.05))));
-	assert((closeEnough(std::midpoint(T(11.4), T(-1.3)), T( 5.05))));
+	assert((closeEnough(std::midpoint(T( 1.3), T(11.4)), T( 6.35),    eps)));
+	assert((closeEnough(std::midpoint(T(11.33), T(31.45)), T(21.39),  eps)));
+	assert((closeEnough(std::midpoint(T(-1.3), T(11.4)), T( 5.05),    eps)));
+	assert((closeEnough(std::midpoint(T(11.4), T(-1.3)), T( 5.05),    eps)));
+	assert((closeEnough(std::midpoint(T(0.1),  T(0.4)),  T(0.25),     eps)));
 
-	assert((closeEnough(std::midpoint(T(11.2345), T(14.5432)), T(12.88885))));
+	assert((closeEnough(std::midpoint(T(11.2345), T(14.5432)), T(12.88885),  eps)));
 	
 //	From e to pi
 	assert((closeEnough(std::midpoint(T(2.71828182845904523536028747135266249775724709369995),
 	                                  T(3.14159265358979323846264338327950288419716939937510)),
-	                                  T(2.92993724102441923691146542731608269097720824653752))));
-//										2.92993724102441923691146542731608269097720824653752
+	                                  T(2.92993724102441923691146542731608269097720824653752),  eps)));
+
+	assert((closeEnough(std::midpoint(maxV, T(0)), maxV/2, eps)));
+	assert((closeEnough(std::midpoint(T(0), maxV), maxV/2, eps)));
+	assert((closeEnough(std::midpoint(minV, T(0)), minV/2, eps)));
+	assert((closeEnough(std::midpoint(T(0), minV), minV/2, eps)));
+	assert((closeEnough(std::midpoint(maxV, maxV), maxV,   eps)));
+	assert((closeEnough(std::midpoint(minV, minV), minV,   eps)));
+
+	assert((closeEnough(std::midpoint(maxV/2, maxV/8),  maxV/16*5,   eps)));
+	assert((closeEnough(std::midpoint(minV/4, minV/16), minV/32*5,   eps)));
+
+
+//	Things that can't be compared exactly
+// 	T percent = std::pow(T(10), 6 - std::numeric_limits<T>::max_digits10 );
+ 	constexpr T pct = fp_error_pct<T>();
+	assert((closePercent(std::midpoint(T( 1.3), T(11.4)), T( 6.35),    pct)));
+	assert((closePercent(std::midpoint(T(11.33), T(31.45)), T(21.39),  pct)));
+	assert((closePercent(std::midpoint(T(-1.3), T(11.4)), T( 5.05),    pct)));
+	assert((closePercent(std::midpoint(T(11.4), T(-1.3)), T( 5.05),    pct)));
+	assert((closePercent(std::midpoint(T(0.1),  T(0.4)),  T(0.25),     pct)));
+
+	assert((closePercent(std::midpoint(T(11.2345), T(14.5432)), T(12.88885),  pct)));
+	
+//	From e to pi
+	assert((closePercent(std::midpoint(T(2.71828182845904523536028747135266249775724709369995),
+	                                  T(3.14159265358979323846264338327950288419716939937510)),
+	                                  T(2.92993724102441923691146542731608269097720824653752),  pct)));
+
+	assert((closePercent(std::midpoint(maxV, T(0)), maxV/2, pct)));
+	assert((closePercent(std::midpoint(T(0), maxV), maxV/2, pct)));
+	assert((closePercent(std::midpoint(minV, T(0)), minV/2, pct)));
+	assert((closePercent(std::midpoint(T(0), minV), minV/2, pct)));
+	assert((closePercent(std::midpoint(maxV, maxV), maxV,   pct)));
+	assert((closePercent(std::midpoint(minV, minV), minV,   pct)));
+
 //	Denormalized values
     
 //	Check two values "close to each other"
@@ -232,7 +348,10 @@ void fp_test()
 	assert(res == d1 || res == d2);
 	assert(d1 <= res);
 	assert(res <= d2);
-	
+
+//	Values near min and max
+// 	assert(std::isinf(std::midpoint(maxV/3, (maxV/4)*3)));
+// 	assert(std::isinf(std::midpoint(minV/3, (minV/4)*3)));
 }
 
 template <typename T>
